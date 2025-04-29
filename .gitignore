@@ -185,12 +185,12 @@ cython_debug/
 ehthumbs.db
 Thumbs.db
 
-# Output Directories / Data / Checkpoints
+# Output Directories / Datasets / Checkpoints
 /output/
 /outputs/
 /logs/
 /checkpoints/
-/data/ # If storing large datasets directly in project (usually not recommended)
+/datasets/
 *.pth
 *.pt
 *.ckpt

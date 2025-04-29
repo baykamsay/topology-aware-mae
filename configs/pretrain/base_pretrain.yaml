@@ -1,0 +1,54 @@
+# Model Configuration
+model:
+  name: convnextv2_pico
+  patch_size: 16  # For 112x112 input
+  decoder_depth: 1
+  decoder_embed_dim: 512
+  mask_ratio: 0.6
+  norm_pix_loss: true
+
+# Loss Configuration
+loss:
+  name: masked_mse
+  
+# Data Configuration
+data:
+  input_size: 112
+  data_path: "/datasets/pretrain/roads/train"
+  eval_data_path: "/datasets/pretrain/roads/val"
+  num_workers: 8
+  pin_mem: true
+
+# Pre-training Hyperparameters
+training:
+  # Optimizer parameters
+  optimizer: adamw
+  weight_decay: 0.05
+  beta1: 0.9
+  beta2: 0.95
+  # Learning Rate Schedule
+  blr: 1.5e-4 # Base LR
+  min_lr: 0.0 # Lower bound
+  warmup_epochs: 40
+  # Training loop
+  epochs: 800 # Adjust as needed
+  batch_size: 128 # Adjust based on GPU memory
+  update_freq: 1 # Gradient accumulation steps
+  seed: 42
+
+# Logging & Checkpointing
+logging:
+  log_dir: "./output/logs/pretrain" # Tensorboard/Output log dir
+  output_dir: "./output/checkpoints/pretrain" # Checkpoint dir
+  enable_wandb: true
+  wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
+  wandb_entity: null # Your W&B username/team (optional)
+  run_name: "pretrain_base_run_1" # Optional custom run name
+  vis_freq: 20 # Visualize every N epochs
+  save_ckpt_freq: 50 # Save checkpoint every N epochs
+
+# Distributed Training (defaults, often overridden by environment)
+distributed:
+  dist_url: "env://"
+  world_size: 1
+  local_rank: -1
