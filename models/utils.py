@@ -6,6 +6,34 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+class DenseGRN(nn.Module):
+    """ GRN layer that handles masking for dense simulation of sparse conv.
+        Based on the provided JAX implementation concept.
+    """
+    def __init__(self, dim, eps=1e-6):
+        super().__init__()
+        self.gamma = nn.Parameter(torch.zeros(1, 1, 1, dim)) # Parameters for affine transform
+        self.beta = nn.Parameter(torch.zeros(1, 1, 1, dim))
+        self.eps = eps
+
+    def forward(self, x, mask=None):
+        # Assumes input format is (N, H, W, C) - channels_last
+        inputs = x # Store original input for residual connection & final scaling
+
+        if mask is not None:
+            # Apply mask to the input features before normalization calculation
+            # Mask shape should be broadcastable, e.g., (N, H, W, 1)
+            x = x * (1. - mask)
+
+        # Calculate norm over spatial dimensions (H, W)
+        Gx = torch.norm(x, p=2, dim=(1, 2), keepdim=True)
+        # Calculate mean norm across channels (C)
+        Nx = Gx / (Gx.mean(dim=-1, keepdim=True) + self.eps)
+
+        # Apply GRN: Scale original input by Nx, add bias, and add residual
+        # Note: Scaling the *original* input 'inputs' by Nx, as per JAX code example
+        return self.gamma * (inputs * Nx) + self.beta + inputs
+
 class LayerNorm(nn.Module):
     """ LayerNorm that supports two data formats: channels_last (default) or channels_first. 
     The ordering of the dimensions in the inputs. channels_last corresponds to inputs with 
