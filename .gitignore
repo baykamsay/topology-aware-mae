@@ -172,3 +172,28 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# IDE
+.vscode/
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Output Directories / Data / Checkpoints
+/output/
+/outputs/
+/logs/
+/checkpoints/
+/data/ # If storing large datasets directly in project (usually not recommended)
+*.pth
+*.pt
+*.ckpt
+
+# Wandb local files
+/wandb/
