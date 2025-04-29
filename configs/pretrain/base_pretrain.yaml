@@ -14,8 +14,8 @@ loss:
 # Data Configuration
 data:
   input_size: 112
-  data_path: "/datasets/pretrain/roads/train"
-  eval_data_path: "/datasets/pretrain/roads/val"
+  data_path: "./data/pretrain/roads/train"
+  eval_data_path: "./data/pretrain/roads/val"
   num_workers: 8
   pin_mem: true
 

@@ -190,7 +190,7 @@ Thumbs.db
 /outputs/
 /logs/
 /checkpoints/
-/datasets/
+/data/
 *.pth
 *.pt
 *.ckpt
