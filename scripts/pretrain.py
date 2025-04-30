@@ -16,7 +16,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from utils.config import load_config
-from models import convnextv2
+from models import convnextv2, fcmae
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -55,7 +55,7 @@ def main(args):
     logger.info("Setting up dataset and DataLoader...")
 
     # Define Transforms
-    input_size = config.get('data', {}).get('input_size', 112)
+    input_size = config.get('data', {}).get('input_size', 128)
     # ImageNet default mean and std
     img_mean = [0.485, 0.456, 0.406]
     img_std = [0.229, 0.224, 0.225]
@@ -135,17 +135,28 @@ def main(args):
         logger.info("No validation dataset provided, skipping DataLoader creation for validation.")
     # ---- End Dataset and DataLoader setup ----
 
-    model_name = config.get('model', {}).get('name', 'convnextv2_tiny')
+    model_config = config.get('model', {})
+    model_name = model_config.get('name', 'convnextv2_pico')
+    model_params = {k: v for k, v in model_config.items() if k != "name"}
+    # try:
+    #     model = convnextv2.__dict__[model_name]()
+    #     logger.info(f"Model {model_name} loaded successfully.")
+    #     print(f"Model architecture: {model}")
+    # except KeyError:
+    #     logger.error(f"Model {model_name} is not defined in the models module.")
+    #     sys.exit(1)
+    # except Exception as e:
+    #     logger.error(f"Error loading model {model_name}: {e}")
+    #     sys.exit(1)
+
     try:
-        model = convnextv2.__dict__[model_name]()
+        model = fcmae.__dict__[model_name](**model_params)
         logger.info(f"Model {model_name} loaded successfully.")
         print(f"Model architecture: {model}")
-    except KeyError:
-        logger.error(f"Model {model_name} is not defined in the models module.")
-        sys.exit(1)
     except Exception as e:
         logger.error(f"Error loading model {model_name}: {e}")
         sys.exit(1)
+
     # --- Placeholder for the rest of the pretraining script ---
     print("Starting pretraining...")
     print("Pretraining completed successfully.")

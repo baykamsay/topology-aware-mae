@@ -6,8 +6,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.models.layers import trunc_normal_, DropPath
-
-# Assuming utils.py is in the same directory or path is handled
 from .utils import LayerNorm, DenseGRN # Use DenseGRN
 
 class Block(nn.Module):
