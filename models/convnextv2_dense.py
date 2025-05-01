@@ -46,9 +46,9 @@ class Block(nn.Module):
         if mask is not None:
             # Ensure mask is in NCHW format if needed, or broadcastable
             if mask.shape[1] != x.shape[1] and mask.shape[1] == 1: # (N, 1, H, W) -> (N, C, H, W)
-                 mask_nchw = mask.repeat(1, x.shape[1], 1, 1)
+                mask_nchw = mask.repeat(1, x.shape[1], 1, 1)
             else:
-                 mask_nchw = mask # Assume it's already (N, C, H, W) or similar
+                mask_nchw = mask # Assume it's already (N, C, H, W) or similar
             x = x * (1. - mask_nchw)
 
         x = self.dwconv(x)
@@ -147,6 +147,12 @@ class DenseConvNeXtV2(nn.Module):
              if m.weight is not None:
                  nn.init.constant_(m.weight, 1.0)
 
+    def upsample_mask(self, mask, scale):
+        assert len(mask.shape) == 2
+        p = int(mask.shape[1] ** .5)
+        return mask.reshape(-1, p, p).\
+                    repeat_interleave(scale, axis=1).\
+                    repeat_interleave(scale, axis=2)
 
     def forward(self, x, patch_mask):
         """ Forward pass for the encoder.
@@ -159,19 +165,11 @@ class DenseConvNeXtV2(nn.Module):
         Returns:
             torch.Tensor: Encoded features (dense tensor).
         """
+        mask = self.upsample_mask(patch_mask, 2**(self.num_stages-1)) 
+        mask = mask.unsqueeze(1).type_as(x)
+
         # Stem (Patchify)
         x = self.downsample_layers[0](x) # (N, C_stem, H/4, W/4)
-
-        # Upsample patch mask to match the spatial resolution after stem
-        # patch_mask is (N, L), needs to become (N, H/4, W/4) or similar
-        N, L = patch_mask.shape
-        H_patch, W_patch = x.shape[-2], x.shape[-1] # Spatial dim after stem
-        if L != H_patch * W_patch:
-             # This indicates an issue with config (patch_size, input_size) vs stem stride
-             raise ValueError(f"Number of patches ({L}) does not match feature map size ({H_patch}x{W_patch}) after stem.")
-
-        # Reshape patch_mask to spatial format (N, 1, H/4, W/4) - 1 means mask
-        mask = patch_mask.reshape(N, 1, H_patch, W_patch).float() # Ensure float for multiplication
 
         # Apply mask *after* the stem convolution (similar to original sparse impl.)
         x = x * (1. - mask)

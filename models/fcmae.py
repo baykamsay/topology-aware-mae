@@ -224,3 +224,8 @@ def convnextv2_huge(**kwargs):
     model = FCMAE(
         depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
+
+def convnextv2_test(**kwargs):
+    model = FCMAE(
+        depths=[2, 6, 2], dims=[128, 256, 512], **kwargs)
+    return model
