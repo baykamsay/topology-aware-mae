@@ -16,8 +16,7 @@ data:
   input_size: 128
   data_path: "./data/pretrain/roads/train"
   eval_data_path: "./data/pretrain/roads/val"
-  num_workers: 8
-  pin_mem: true
+  num_workers: 16
 
 # Pre-training Hyperparameters
 training:
@@ -27,22 +26,24 @@ training:
   beta1: 0.9
   beta2: 0.95
   # Learning Rate Schedule
-  blr: 1.5e-4 # Base LR
+  learning_rate: 1.5e-4 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 40
   # Training loop
   epochs: 800 # Adjust as needed
   batch_size: 128 # Adjust based on GPU memory
-  update_freq: 1 # Gradient accumulation steps
+  gradient_accumulation_steps: 1 # Gradient accumulation steps
+  # Misc
+  mixed_precision: true # Use mixed precision training
   seed: 42
 
 # Logging & Checkpointing
 logging:
-  log_dir: "./output/logs/pretrain" # Tensorboard/Output log dir
-  output_dir: "./output/checkpoints/pretrain" # Checkpoint dir
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_entity: null # Your W&B username/team (optional)
-  run_name: "pretrain_base_run_1" # Optional custom run name
-  vis_freq: 20 # Visualize every N epochs
-  save_ckpt_freq: 50 # Save checkpoint every N epochs
+  wandb_run_name: "pretrain_base_run_1" # Optional custom run name
+  output_dir: "./output/pretrain" # Checkpoint dir
+  val_interval: 5 # validation interval
+  log_interval: 1 # wandb log interval
+  include_vis: true # Include visualizations
+  vis_interval: 20 # visualization interval
