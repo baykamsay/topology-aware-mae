@@ -46,9 +46,3 @@ logging:
   run_name: "pretrain_base_run_1" # Optional custom run name
   vis_freq: 20 # Visualize every N epochs
   save_ckpt_freq: 50 # Save checkpoint every N epochs
-
-# Distributed Training (defaults, often overridden by environment)
-distributed:
-  dist_url: "env://"
-  world_size: 1
-  local_rank: -1

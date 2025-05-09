@@ -16,7 +16,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from utils.config import load_config
-from models import convnextv2, fcmae
+from models import fcmae
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
