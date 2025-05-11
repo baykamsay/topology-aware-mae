@@ -11,7 +11,10 @@ import torch
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torch.optim as optim
-from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
+import shutil
+import random
+import numpy as np
+from timm.scheduler.cosine_lr import CosineLRScheduler
 
 # Adjust the path to include the root directory
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -37,6 +40,51 @@ def get_args_parser():
     )
 
     return parser
+
+def validate(val_loader, model, device, config, use_mixed_precision, epoch):
+    """
+    Performs validation on the validation dataset.
+
+    Args:
+        val_loader (DataLoader): DataLoader for the validation set.
+        model (nn.Module): The model to evaluate.
+        device (torch.device): The device to run evaluation on.
+        model_config_params (dict): Model-specific configuration parameters (e.g., mask_ratio).
+        use_mixed_precision (bool): Whether to use mixed precision for evaluation.
+        epoch (int): Current epoch number (for logging).
+        total_epochs (int): Total number of epochs (for logging).
+
+    Returns:
+        float: Average validation loss.
+    """
+    model.eval()  # Set model to evaluation mode
+    total_val_loss = 0.0
+    num_val_batches = 0
+
+    with torch.no_grad():  # Disable gradient calculations
+        for batch_idx, (samples, _) in enumerate(val_loader):
+            samples = samples.to(device, non_blocking=True)
+            
+            # Forward pass
+            if use_mixed_precision and device.type == 'cuda':
+                with torch.amp.autocast('cuda'):
+                    # The model's forward method returns: loss, predicted_patches, mask
+                    loss, _, _ = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+            else:
+                loss, _, _ = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+            
+            total_val_loss += loss.item()
+            num_val_batches += 1
+            if (batch_idx + 1) % 20 == 0: # Log progress every 20 val batches
+                 logger.debug(f"Validation Epoch {epoch+1} - Batch {batch_idx+1}/{len(val_loader)}")
+
+
+    if num_val_batches == 0:
+        logger.warning("Validation loader was empty. Returning 0 validation loss.")
+        return 0.0
+        
+    avg_val_loss = total_val_loss / num_val_batches
+    return avg_val_loss
 
 def get_param_groups(model, weight_decay):
     """
@@ -65,6 +113,30 @@ def get_param_groups(model, weight_decay):
         {'params': no_decay, 'weight_decay': 0.}
     ]
 
+def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
+    """
+    Saves a training checkpoint.
+
+    Args:
+        state (dict): Contains model, optimizer, scheduler states, epoch, best_val_loss.
+        is_best (bool): True if this checkpoint has the best validation loss so far.
+        output_dir (str): Directory where checkpoints will be saved.
+        filename (str): Base name for the checkpoint file.
+    """
+    filepath = os.path.join(output_dir, filename)
+    torch.save(state, filepath)
+    logger.info(f"Checkpoint saved to {filepath}")
+
+    if is_best:
+        best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
+        shutil.copyfile(filepath, best_filepath)
+        logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
+
+    # # Always save a 'latest' checkpoint for easy resume
+    # latest_filepath = os.path.join(output_dir, "latest_checkpoint.pth")
+    # shutil.copyfile(filepath, latest_filepath) # Or save directly to latest_checkpoint.pth
+    # logger.info(f"Latest checkpoint saved to {latest_filepath}")
+
 def main(args):
     # Load the configuration
     config = load_config(args.config)
@@ -72,12 +144,32 @@ def main(args):
         print("Failed to load configuration. Exiting.")
         sys.exit(1)
     
+    training_config = config.get('training', {})
+    log_config = config.get('logging', {})
+    output_dir = log_config.get('output_dir', './output/pretrain/test_run')
+    
     # Set up directories for logging and checkpoints
-    os.makedirs(config.get('logging', {}).get('output_dir', './output/pretrain'), exist_ok=True)
+    os.makedirs(output_dir, exist_ok=True)
     
     # Print the loaded configuration
     print("Loaded configuration:")
     pprint.pprint(config)
+
+    # ---- Start setting up the seed ----
+    seed = training_config.get('seed', 42)
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    # monai.utils.set_determinism(seed=config.TRAIN.SEED) # type: ignore
+
+    def seed_worker(worker_id):
+        worker_seed = torch.initial_seed() % 2**32
+        np.random.seed(worker_seed)
+        random.seed(worker_seed)
+    
+    g = torch.Generator()
+    g.manual_seed(seed)
+    # ---- End setting up the seed ----
 
     # ---- Start setting up device ----
     if torch.cuda.is_available():
@@ -110,7 +202,8 @@ def main(args):
 
     # Validation transforms
     val_transform = transforms.Compose([
-        transforms.RandomResizedCrop(input_size, scale=(0.2, 0.5), ratio=(1, 1), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.Resize(375, interpolation=transforms.InterpolationMode.BICUBIC, max_size=750),
+        transforms.CenterCrop(input_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
     ])
@@ -155,6 +248,8 @@ def main(args):
         num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=True,
+        worker_init_fn=seed_worker,
+        generator=g,
     )
     logger.info(f"Training DataLoader created with batch size {batch_size} and {num_workers} workers.")
 
@@ -167,6 +262,8 @@ def main(args):
             num_workers=num_workers,
             pin_memory=pin_memory,
             drop_last=False,
+            worker_init_fn=seed_worker,
+            generator=g,
         )
         logger.info(f"Validation DataLoader created with batch size {batch_size} and {num_workers} workers.")
     else:
@@ -225,49 +322,36 @@ def main(args):
 
     # Learning Rate Scheduler (Cosine Annealing with Warmup)
     logger.info("Setting up learning rate scheduler with warmup...")
-    warmup_epochs = training_config.get('warmup_epochs', 40)
-    total_epochs = training_config.get('epochs', 800)
+
+    grad_acc_steps = config.get('training', {}).get('gradient_accumulation_steps', 1)
+    if grad_acc_steps < 1:
+        grad_acc_steps = 1
+        logger.warning("gradient_accumulation_steps was less than 1, set to 1.")
+
+    num_training_steps_per_epoch = len(train_loader) // grad_acc_steps
+    total_epochs = config.get('training', {}).get('epochs', 800)
+    total_training_steps = num_training_steps_per_epoch * total_epochs
+    
+    warmup_epochs = config.get('training', {}).get('warmup_epochs', 40)
+    # Calculate warmup steps, ensuring it doesn't exceed total steps if epochs are very few
+    warmup_steps = min(num_training_steps_per_epoch * warmup_epochs, total_training_steps)
+
     min_lr = training_config.get('min_lr', 0.0)
     
-    if warmup_epochs > 0:
-        # Scheduler for the warmup phase
-        # It will linearly increase the LR from base_lr * start_factor to base_lr * end_factor
-        # To go from min_lr to base_lr:
-        warmup_start_factor = min_lr / lr if min_lr > 0 else 1e-7
-
-        scheduler_warmup = LinearLR(
-            optimizer,
-            start_factor=warmup_start_factor, # Start LR = base_lr * start_factor
-            end_factor=1.0,         # End LR = base_lr * end_factor
-            total_iters=warmup_epochs # Number of epochs for warmup
-        )
-        logger.info(f"Warmup scheduler: LinearLR for {warmup_epochs} epochs, from LR {lr*warmup_start_factor:.2e} to {lr*1.0:.2e}.")
-
-        # Scheduler for the decay phase (post-warmup)
-        # T_max is the number of epochs for one cycle of cosine annealing
-        epochs_after_warmup = total_epochs - warmup_epochs
-        scheduler_cosine_decay = CosineAnnealingLR(
-            optimizer,
-            T_max=epochs_after_warmup if epochs_after_warmup > 0 else 1, # Ensure T_max is positive
-            eta_min=min_lr      # Minimum learning rate
-        )
-        logger.info(f"Cosine decay scheduler: CosineAnnealingLR for {epochs_after_warmup} epochs, to min_lr {min_lr:.2e}.")
-
-        # Combine them sequentially
-        lr_scheduler = SequentialLR(
-            optimizer,
-            schedulers=[scheduler_warmup, scheduler_cosine_decay],
-            milestones=[warmup_epochs] # Epoch at which to switch from scheduler_warmup to scheduler_cosine_decay
-        )
-    else: # No warmup, just cosine decay from the start
-        lr_scheduler = CosineAnnealingLR(
-            optimizer,
-            T_max=total_epochs,
-            eta_min=min_lr
-        )
-        logger.info(f"LR Scheduler: CosineAnnealingLR for {total_epochs} epochs, to min_lr {min_lr:.2e} (no warmup).")
-    
-    logger.info(f"Base LR for schedulers: {lr}, Min LR: {min_lr}")
+    lr_scheduler = CosineLRScheduler(
+        optimizer,
+        t_initial=total_training_steps, # Total number of training steps for one cycle
+        lr_min=min_lr,      # Minimum learning rate to decay to
+        warmup_t=warmup_steps,          # Number of warmup steps
+        warmup_lr_init=0.0,             # Start warmup from LR 0.0 (or a very small value like 1e-6 * lr)
+        warmup_prefix=True,             # Ensures warmup is handled correctly before decay
+        cycle_limit=1,                  # Number of cycles (1 for no restarts)
+        t_in_epochs=False,              # t_initial and warmup_t are in steps, not epochs
+    )
+    logger.info(f"LR Scheduler: timm.CosineLRScheduler initialized.")
+    logger.info(f"  Total training steps: {total_training_steps}")
+    logger.info(f"  Warmup steps: {warmup_steps} (equivalent to {warmup_epochs} epochs of {num_training_steps_per_epoch} grad steps)")
+    logger.info(f"  Base LR: {lr}, Min LR: {min_lr}, Warmup Init LR: 0.0")
     # ---- End Optimizer and LR Scheduler Setup ----
 
     # ---- Start Mixed Precision Setup ----
@@ -280,66 +364,132 @@ def main(args):
         logger.warning("Mixed precision is enabled in config, but device is CPU. It will not be used.")
     # ---- End Mixed Precision Setup ----
 
-    # ---- Placeholder for Checkpoint Loading ----
+    # ---- Start Checkpoint Loading ----
     start_epoch = 0
-    # Implement this later
-    # ---- End Placeholder for Checkpoint Loading ----
+    global_step = 0
+    best_val_loss = float('inf')
 
+    checkpoint_to_load_path = os.path.join(output_dir, "latest_checkpoint.pth")
+
+    if os.path.isfile(checkpoint_to_load_path):
+        logger.info(f"Loading checkpoint: {checkpoint_to_load_path}")
+        try:
+            checkpoint = torch.load(checkpoint_to_load_path, map_location=device) # Load to current device
+            
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+            start_epoch = checkpoint['epoch']
+            global_step = checkpoint.get('global_step', start_epoch * num_training_steps_per_epoch) # Restore global_step
+            
+            if 'best_val_loss' in checkpoint:
+                best_val_loss = checkpoint['best_val_loss']
+            
+            if use_mixed_precision and grad_scaler and 'grad_scaler_state_dict' in checkpoint:
+                grad_scaler.load_state_dict(checkpoint['grad_scaler_state_dict'])
+            
+            logger.info(f"Successfully loaded checkpoint. Resuming training from epoch {start_epoch}. Best Val Loss: {best_val_loss:.4f}")
+
+        except Exception as e:
+            logger.error(f"Error loading checkpoint {checkpoint_to_load_path}: {e}. Starting from scratch.")
+            start_epoch = 0
+            best_val_loss = float('inf')
+            # Potentially exit
+    else:
+        logger.info("No checkpoint found or specified to resume from. Starting training from scratch.")
+    # ---- End Checkpoint Loading ----
 
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
     for epoch in range(start_epoch, total_epochs):
         model.train()
         running_loss = 0.0
+        optimizer.zero_grad() # Initialize gradients to zero at the start of each epoch / before accumulation window
         # progress_bar = tqdm(train_loader, desc=f"Epoch {epoch+1}/{total_epochs}", leave=False) # Requires tqdm
 
         for batch_idx, (samples, _) in enumerate(train_loader): # We don't use labels for MAE
             samples = samples.to(device, non_blocking=True)
-            
-            # Zero gradients for each batch
-            optimizer.zero_grad()
 
             # Mixed precision forward pass
             if use_mixed_precision and grad_scaler:
                 with torch.amp.autocast('cuda'):
                     loss, _, _ = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                loss = loss / grad_acc_steps # Scale loss for gradient accumulation
                 grad_scaler.scale(loss).backward()
-                grad_scaler.step(optimizer)
-                grad_scaler.update()
             else: # Standard precision
                 loss, _, _ = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                loss = loss / grad_acc_steps
                 loss.backward()
-                optimizer.step()
             
-            running_loss += loss.item()
+            # Gradient accumulation
+            if (batch_idx + 1) % grad_acc_steps == 0 or (batch_idx + 1) == len(train_loader):
+                if use_mixed_precision and grad_scaler:
+                    grad_scaler.step(optimizer)
+                    grad_scaler.update()
+                else:
+                    optimizer.step()
+                
+                optimizer.zero_grad() # Zero gradients after optimizer step
 
-            if (batch_idx + 1) % config.get('logging', {}).get('log_interval', 50) == 0: # Log every N batches
-                current_lr = optimizer.param_groups[0]['lr']
-                logger.info(f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} | Training Loss: {loss.item():.4f} | LR: {current_lr:.6f}")
+                # Step the LR scheduler (per iteration/optimizer step)
+                global_step += 1
+                lr_scheduler.step_update(num_updates=global_step) # num_updates is the global step count
+            
+            running_loss += loss.item() * grad_acc_steps # Unscale loss for logging
+
+            if (batch_idx + 1) % (config.get('logging', {}).get('log_interval', 50) * grad_acc_steps) == 0:
+                current_batch_lr = optimizer.param_groups[0]['lr']
+                logger.info(f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} (Step: {global_step}) | Training Loss: {loss.item() * grad_acc_steps:.4f} | LR: {current_batch_lr:.6e}")
 
         epoch_loss = running_loss / len(train_loader)
-        current_lr = optimizer.param_groups[0]['lr'] # Get LR after scheduler step (if any per epoch)
-        logger.info(f"===> Epoch {epoch+1}/{total_epochs} | Average Training Loss: {epoch_loss:.4f} | LR: {current_lr:.6f}")
+        current_epoch_end_lr = optimizer.param_groups[0]['lr']
+        logger.info(f"===> Epoch {epoch+1}/{total_epochs} | Average Training Loss: {epoch_loss:.4f} | End of Epoch LR: {current_epoch_end_lr:.6e}")
 
         # Step the LR scheduler (typically after each epoch)
-        lr_scheduler.step()
+        lr_scheduler.step(epoch + 1)
 
-        # ---- Placeholder for Validation ----
-        # if (epoch + 1) % config.get('logging', {}).get('val_interval', 1) == 0:
-        #     if val_loader:
-        #         # validation_loss = validate(val_loader, model, device, config)
-        #         # logger.info(f"Epoch {epoch+1} Validation Loss: {validation_loss:.4f}")
-        #         pass # We will implement this
-        #     else:
-        #         logger.info(f"Epoch {epoch+1}: No validation loader available, skipping validation.")
-        # ---- End Placeholder for Validation ----
+        # ---- Validation Step ----
+        if (epoch + 1) % log_config.get('val_interval', 1) == 0:
+            if val_loader:
+                logger.info(f"--- Starting Validation for Epoch {epoch+1} ---")
+                validation_loss = validate(
+                    val_loader, 
+                    model, 
+                    device, 
+                    model_config,
+                    use_mixed_precision,
+                    epoch
+                )
+                logger.info(f"====> Epoch {epoch+1} | Validation Loss: {validation_loss:.4f} ====")
 
-        # ---- Placeholder for Checkpointing ----
-        # if (epoch + 1) % config.get('logging', {}).get('val_interval', 1) == 0: # Tying to val_interval as requested
-            # save_checkpoint(...)
-            # pass # We will implement this
-        # ---- End Placeholder for Checkpointing ----
+                is_best = validation_loss < best_val_loss
+                if is_best:
+                    best_val_loss = validation_loss
+                    logger.info(f"Best validation loss updated to {best_val_loss:.4f} at epoch {epoch+1}.")
+            else:
+                is_best = False
+                logger.info(f"Epoch {epoch+1}: No validation loader available, skipping validation.")
         
+
+            # ---- Save checkpoint ----
+            checkpoint_state = {
+                'epoch': epoch + 1, # Next epoch to start from
+                'global_step': global_step,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'scheduler_state_dict': lr_scheduler.state_dict(),
+                'best_val_loss': best_val_loss,
+                'config': config # Save config for reference, optional
+            }
+            if use_mixed_precision and grad_scaler:
+                checkpoint_state['grad_scaler_state_dict'] = grad_scaler.state_dict()
+
+            # Save checkpopint for latest_checkpoint.pth and best_checkpoint.pth
+            save_checkpoint(checkpoint_state, is_best, output_dir, filename="latest_checkpoint.pth")
+            # ---- Save checkpoint ----
+        
+        # ---- End Validation Step ----
+
         # ---- Placeholder for W&B Logging & Visualization ----
         # if wandb_logger is not None:
             # Log metrics

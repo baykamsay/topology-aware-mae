@@ -43,7 +43,7 @@ logging:
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "pretrain_base_run_1" # Optional custom run name
   output_dir: "./output/pretrain/base_run" # Checkpoint dir
-  val_interval: 5 # validation interval
+  val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 20 # visualization interval
