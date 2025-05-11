@@ -1,6 +1,6 @@
 # Model Configuration
 model:
-  name: convnextv2_pico
+  name: convnextv2_test
   patch_size: 16  # For 128x128 input
   decoder_depth: 1
   decoder_embed_dim: 512
@@ -42,7 +42,7 @@ logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "pretrain_base_run_1" # Optional custom run name
-  output_dir: "./output/pretrain" # Checkpoint dir
+  output_dir: "./output/pretrain/base_run" # Checkpoint dir
   val_interval: 5 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations

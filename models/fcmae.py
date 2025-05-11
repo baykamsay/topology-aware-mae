@@ -178,7 +178,7 @@ class FCMAE(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
     
-    def forward(self, imgs, labels=None, mask_ratio=0.6):
+    def forward(self, imgs, mask_ratio=0.6):
         x, mask = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(x, mask)
         loss = self.forward_loss(imgs, pred, mask)
