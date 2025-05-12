@@ -14,6 +14,7 @@ import torch.optim as optim
 import shutil
 import random
 import numpy as np
+import wandb
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
 # Adjust the path to include the root directory
@@ -21,6 +22,7 @@ project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
 from utils.config import load_config
+from utils.visualizations import log_mae_visualizations
 from models import fcmae
 
 # Set up logging
@@ -170,6 +172,28 @@ def main(args):
     g = torch.Generator()
     g.manual_seed(seed)
     # ---- End setting up the seed ----
+
+    # ---- W&B Initialization ----
+    wandb_logger = None
+    if log_config.get('enable_wandb', False):
+        try:
+            wandb_logger = wandb.init(
+                project=log_config.get('wandb_project', 'topo-conv-mae-pretrain'),
+                name=log_config.get('wandb_run_name', None), # Optional run name
+                config=config, # Log the entire config
+                # dir=output_dir, # Optional: Save wandb files in the run's output directory
+                resume='allow', # Allow resuming previous runs if id is reused (useful with checkpointing)
+                # id=wandb_run_id # Optionally set an ID for explicit resuming, can be generated or from checkpoint
+            )
+            logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
+            # Optionally watch the model (can increase overhead)
+            # wandb.watch(model, log='gradients', log_freq=1000) 
+        except Exception as e:
+            logger.error(f"Failed to initialize W&B: {e}. Disabling W&B logging.")
+            wandb_logger = None # Ensure it's None if init fails
+    else:
+        logger.info("W&B logging is disabled in the configuration.")
+    # ---- End W&B Initialization ----
 
     # ---- Start setting up device ----
     if torch.cuda.is_available():
@@ -441,6 +465,14 @@ def main(args):
                 current_batch_lr = optimizer.param_groups[0]['lr']
                 logger.info(f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} (Step: {global_step}) | Training Loss: {loss.item() * grad_acc_steps:.4f} | LR: {current_batch_lr:.6e}")
 
+                # ---- Start W&B Logging ----
+                if wandb_logger:
+                    wandb.log({
+                        "train/lr": current_batch_lr,
+                        "train/loss": loss.item() * grad_acc_steps,
+                    }, step=global_step)
+                # ---- End W&B Logging ----
+
         epoch_loss = running_loss / len(train_loader)
         current_epoch_end_lr = optimizer.param_groups[0]['lr']
         logger.info(f"===> Epoch {epoch+1}/{total_epochs} | Average Training Loss: {epoch_loss:.4f} | End of Epoch LR: {current_epoch_end_lr:.6e}")
@@ -472,34 +504,60 @@ def main(args):
         
 
             # ---- Save checkpoint ----
-            checkpoint_state = {
-                'epoch': epoch + 1, # Next epoch to start from
-                'global_step': global_step,
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': optimizer.state_dict(),
-                'scheduler_state_dict': lr_scheduler.state_dict(),
-                'best_val_loss': best_val_loss,
-                'config': config # Save config for reference, optional
-            }
-            if use_mixed_precision and grad_scaler:
-                checkpoint_state['grad_scaler_state_dict'] = grad_scaler.state_dict()
+            if log_config.get('checkpointing', True):
+                checkpoint_state = {
+                    'epoch': epoch + 1, # Next epoch to start from
+                    'global_step': global_step,
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': optimizer.state_dict(),
+                    'scheduler_state_dict': lr_scheduler.state_dict(),
+                    'best_val_loss': best_val_loss,
+                    'config': config # Save config for reference, optional
+                }
+                if use_mixed_precision and grad_scaler:
+                    checkpoint_state['grad_scaler_state_dict'] = grad_scaler.state_dict()
 
-            # Save checkpopint for latest_checkpoint.pth and best_checkpoint.pth
-            save_checkpoint(checkpoint_state, is_best, output_dir, filename="latest_checkpoint.pth")
+                # Save checkpopint for latest_checkpoint.pth and best_checkpoint.pth
+                save_checkpoint(checkpoint_state, is_best, output_dir, filename="latest_checkpoint.pth")
             # ---- Save checkpoint ----
         
         # ---- End Validation Step ----
 
-        # ---- Placeholder for W&B Logging & Visualization ----
-        # if wandb_logger is not None:
-            # Log metrics
-            # if (epoch + 1) % config.get('logging', {}).get('vis_interval', 20) == 0:
-                # Log visualizations
-        # ---- End Placeholder for W&B Logging & Visualization ----
+        # ---- W&B Metric Logging ----
+        if wandb_logger:
+            log_data = {
+                "val/epoch": epoch + 1, # Log current epoch number (1-indexed)
+            }
+            if validation_loss is not None: # Only log validation loss if validation was run
+                log_data["val/loss"] = validation_loss
+            
+            wandb.log(log_data, step=global_step) # Log metrics against global_step
+            # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 
+            # Logging against global_step is often preferred for step-based LR schedules
 
-    # --- End of Training Loop ---
+        # ---- End W&B Metric Logging ----
+
+        # ---- W&B Visualization Logging ----
+        vis_interval = log_config.get('vis_interval', 20)
+        if wandb_logger and log_config.get('include_vis', False) and val_loader: # Use val_loader for visualization samples
+           if (epoch + 1) % vis_interval == 0:
+               logger.info(f"--- Generating Visualizations for Epoch {epoch+1} ---")
+               log_mae_visualizations(
+                   model, 
+                   val_loader, # Using validation loader for consistent visualization samples
+                   device, 
+                   config, 
+                   epoch,
+                   global_step, 
+                   wandb_logger,
+                   num_images=8 # Or get from config
+               )
+        # ---- End W&B Visualization ----
+
+    # ---- End of Training Loop ----
     logger.info("Pretraining completed successfully.")
-    # --- End of placeholder ---
+    if wandb_logger:
+        wandb_logger.finish() # Finish the W&B run
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Topo MAE Pre-training', parents=[get_args_parser()])

@@ -6,7 +6,7 @@ Adapted from: https://github.com/facebookresearch/ConvNeXt-V2/blob/2553895753323
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from timm.models.layers import trunc_normal_, DropPath
+from timm.layers import trunc_normal_, DropPath
 from .utils import LayerNorm, GRN
 
 class Block(nn.Module):

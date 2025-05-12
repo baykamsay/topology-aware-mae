@@ -6,7 +6,7 @@ Adapted from https://github.com/facebookresearch/ConvNeXt-V2/blob/2553895753323c
 import torch
 import torch.nn as nn
 
-from timm.models.layers import trunc_normal_
+from timm.layers import trunc_normal_
 from .convnextv2_dense import DenseConvNeXtV2
 from .convnextv2 import Block
 
@@ -70,7 +70,7 @@ class FCMAE(nn.Module):
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d):
             w = m.weight.data
-            trunc_normal_(w.view([w.shape[0], -1]))
+            trunc_normal_(w.view([w.shape[0], -1]), std=.02)
             nn.init.constant_(m.bias, 0)
         if isinstance(m, nn.Linear):
             trunc_normal_(m.weight, std=.02)
