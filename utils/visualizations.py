@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Function to handle denormalization and image preparation for W&B
-def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+def denormalize(tensor, mean=[0.33627802, 0.33987136, 0.29782979], std=[0.19191039, 0.18239774, 0.18225507]):
     # Clone to avoid modifying the original tensor
     tensor = tensor.clone()
     mean = torch.tensor(mean, device=tensor.device).view(1, 3, 1, 1)
@@ -66,6 +66,15 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
                 n, c, _, _ = pred_patches.shape
                 pred_patches = pred_patches.reshape(n, c, -1)
                 pred_patches = torch.einsum('ncl->nlc', pred_patches)
+            
+            # Fix norm_pix_loss visualization
+            if hasattr(model, 'norm_pix_loss') and model.norm_pix_loss:
+                # If norm_pix_loss is True, we need to normalize pred_patches from target patches
+                samples_patches = model.patchify(samples)
+                mean = samples_patches.mean(dim=-1, keepdim=True)
+                var = samples_patches.var(dim=-1, keepdim=True)
+                pred_patches = pred_patches * (var + 1.e-6)**0.5 + mean
+
             reconstructed_imgs = model.unpatchify(pred_patches)
         except AttributeError:
             # If unpatchify needs to be called differently or implemented as utility

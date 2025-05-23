@@ -1,7 +1,7 @@
 # Model Configuration
 model:
   name: convnextv2_test
-  patch_size: 16  # For 128x128 input
+  patch_size: 8  # For 56x56 input
   decoder_depth: 1
   decoder_embed_dim: 512
   mask_ratio: 0.6
@@ -13,9 +13,9 @@ loss:
   
 # Data Configuration
 data:
-  input_size: 128
-  data_path: "./data/pretrain/roads/train"
-  eval_data_path: "./data/pretrain/roads/val"
+  input_size: 56
+  data_path: "./data/pretrain/roads_mini/train"
+  eval_data_path: "./data/pretrain/roads_mini/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
@@ -26,13 +26,13 @@ training:
   beta1: 0.9
   beta2: 0.95
   # Learning Rate Schedule
-  learning_rate: 3.e-4 # Base LR
+  learning_rate: 1.5e-4 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 1
   # Training loop
-  epochs: 20 # Adjust as needed
-  batch_size: 64 # Adjust based on GPU memory
-  gradient_accumulation_steps: 2 # Gradient accumulation steps
+  epochs: 5 # Adjust as needed
+  batch_size: 128 # Adjust based on GPU memory
+  gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
   seed: 42
@@ -41,10 +41,10 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "buildings_20_norm_fix" # Optional custom run name
-  output_dir: "./output/pretrain/test" # Checkpoint dir
+  wandb_run_name: "test_56" # Optional custom run name
+  output_dir: "./output/pretrain/base_run" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
-  vis_interval: 1 # visualization interval
+  vis_interval: 5 # visualization interval
   checkpointing: false

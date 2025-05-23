@@ -23,7 +23,8 @@ sys.path.insert(0, project_root)
 
 from utils.config import load_config
 from utils.visualizations import log_mae_visualizations
-from models import fcmae
+from models.convnextv2 import fcmae
+from models.cnn_mae import cnn_mae
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -211,12 +212,14 @@ def main(args):
     # Define Transforms
     input_size = config.get('data', {}).get('input_size', 128)
     # ImageNet default mean and std
-    img_mean = [0.485, 0.456, 0.406]
-    img_std = [0.229, 0.224, 0.225]
+    # img_mean = [0.485, 0.456, 0.406]
+    # img_std = [0.229, 0.224, 0.225]
+    img_mean = [0.33627802, 0.33987136, 0.29782979]
+    img_std = [0.19191039, 0.18239774, 0.18225507]
 
     # Basic pre-training transforms
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(input_size, scale=(0.1, 0.5), interpolation=transforms.InterpolationMode.BICUBIC),
+        # transforms.RandomResizedCrop(input_size, scale=(0.1, 0.5), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
@@ -226,8 +229,8 @@ def main(args):
 
     # Validation transforms
     val_transform = transforms.Compose([
-        transforms.Resize(375, interpolation=transforms.InterpolationMode.BICUBIC, max_size=750),
-        transforms.CenterCrop(input_size),
+        # transforms.Resize(375, interpolation=transforms.InterpolationMode.BICUBIC, max_size=750),
+        # transforms.CenterCrop(input_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
     ])
@@ -302,7 +305,13 @@ def main(args):
     model_params['loss_config'] = config.get('loss', {'name': 'mse'})
 
     try:
-        model = fcmae.__dict__[model_name](**model_params)
+        if model_name.startswith('cnnmae'):
+            model = cnn_mae.__dict__[model_name](**model_params)
+        elif model_name.startswith('convnextv2'):
+            model = fcmae.__dict__[model_name](**model_params)
+        else:
+            logger.error(f"Model {model_name} not supported.")
+            sys.exit(1)
         model.to(device)
         logger.info(f"Model {model_name} loaded successfully.")
         print(f"Model architecture: {model}")
