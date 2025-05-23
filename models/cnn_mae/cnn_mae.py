@@ -556,9 +556,9 @@ class MaskedAutoencoderCNN(nn.Module):
         self.last_pred_patches = pred_patches.clone().detach()
         self.last_target_patches = target_patches.clone().detach()
 
-        loss = self.loss_func(imgs, pred_patches, mask)
+        loss, individual_losses = self.loss_func(imgs, pred_patches, mask)
 
-        return loss, pred_patches, mask
+        return loss, pred_patches, mask, individual_losses
 
     def no_weight_decay(self) -> Dict[str, Any]:
         """

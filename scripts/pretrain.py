@@ -63,6 +63,7 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
     model.eval()  # Set model to evaluation mode
     total_val_loss = 0.0
     num_val_batches = 0
+    individual_loss_totals = {}  # Dictionary to accumulate individual losses
 
     with torch.no_grad():  # Disable gradient calculations
         for batch_idx, (samples, _) in enumerate(val_loader):
@@ -72,22 +73,39 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
             if use_mixed_precision and device.type == 'cuda':
                 with torch.amp.autocast('cuda'):
                     # The model's forward method returns: loss, predicted_patches, mask
-                    loss, _, _ = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+                    loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
             else:
-                loss, _, _ = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+                loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
             
             total_val_loss += loss.item()
             num_val_batches += 1
+
+            # Accumulate individual losses
+            if individual_losses:
+                for loss_name, loss_value in individual_losses.items():
+                    if loss_name not in individual_loss_totals:
+                        individual_loss_totals[loss_name] = 0.0
+                    individual_loss_totals[loss_name] += loss_value.item()
+
             if (batch_idx + 1) % 20 == 0: # Log progress every 20 val batches
                  logger.debug(f"Validation Epoch {epoch+1} - Batch {batch_idx+1}/{len(val_loader)}")
 
 
     if num_val_batches == 0:
         logger.warning("Validation loader was empty. Returning 0 validation loss.")
-        return 0.0
+        return 0.0, {}
         
     avg_val_loss = total_val_loss / num_val_batches
-    return avg_val_loss
+
+    # Calculate averages for individual losses
+    avg_individual_losses = {}
+    if individual_loss_totals:
+        avg_individual_losses = {
+            loss_name: total_loss / num_val_batches 
+            for loss_name, total_loss in individual_loss_totals.items()
+        }
+
+    return avg_val_loss, avg_individual_losses
 
 def get_param_groups(model, weight_decay):
     """
@@ -446,11 +464,11 @@ def main(args):
             # Mixed precision forward pass
             if use_mixed_precision and grad_scaler:
                 with torch.amp.autocast('cuda'):
-                    loss, _, _ = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                    loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
                 loss = loss / grad_acc_steps # Scale loss for gradient accumulation
                 grad_scaler.scale(loss).backward()
             else: # Standard precision
-                loss, _, _ = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
                 loss = loss / grad_acc_steps
                 loss.backward()
             
@@ -472,14 +490,24 @@ def main(args):
 
             if (batch_idx + 1) % (config.get('logging', {}).get('log_interval', 50) * grad_acc_steps) == 0:
                 current_batch_lr = optimizer.param_groups[0]['lr']
-                logger.info(f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} (Step: {global_step}) | Training Loss: {loss.item() * grad_acc_steps:.4f} | LR: {current_batch_lr:.6e}")
+                log_msg = f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} (Step: {global_step}) | Training Loss: {loss.item() * grad_acc_steps:.4f}"
+                if individual_losses:
+                    individual_loss_str = " | ".join([f"{loss_name}: {loss_value.item():.4f}" for loss_name, loss_value in individual_losses.items()])
+                    log_msg += f" | {individual_loss_str}"
+                log_msg += f" | LR: {current_batch_lr:.6e}"
+                logger.info(log_msg)
 
                 # ---- Start W&B Logging ----
                 if wandb_logger:
-                    wandb.log({
+                    wandb_dict = {
                         "train/lr": current_batch_lr,
                         "train/loss": loss.item() * grad_acc_steps,
-                    }, step=global_step)
+                    }
+
+                    if individual_losses:
+                        for loss_name, loss_value in individual_losses.items():
+                            wandb_dict[f"train/{loss_name}"] = loss_value.item()
+                    wandb.log(wandb_dict, step=global_step)
                 # ---- End W&B Logging ----
 
         epoch_loss = running_loss / len(train_loader)
@@ -493,7 +521,7 @@ def main(args):
         if (epoch + 1) % log_config.get('val_interval', 1) == 0:
             if val_loader:
                 logger.info(f"--- Starting Validation for Epoch {epoch+1} ---")
-                validation_loss = validate(
+                validation_loss, validation_individual_loss = validate(
                     val_loader, 
                     model, 
                     device, 
@@ -501,7 +529,12 @@ def main(args):
                     use_mixed_precision,
                     epoch
                 )
-                logger.info(f"====> Epoch {epoch+1} | Validation Loss: {validation_loss:.4f} ====")
+                log_msg = f"====> Epoch {epoch+1} | Validation Loss: {validation_loss:.4f}"
+                if validation_individual_loss:
+                    individual_loss_str = " | ".join([f"{loss_name}: {loss_value:.4f}" for loss_name, loss_value in validation_individual_loss.items()])
+                    log_msg += f" | {individual_loss_str}"
+                log_msg += f" ===="
+                logger.info(log_msg)
 
                 is_best = validation_loss < best_val_loss
                 if is_best:
@@ -539,6 +572,10 @@ def main(args):
             }
             if validation_loss is not None: # Only log validation loss if validation was run
                 log_data["val/loss"] = validation_loss
+
+            if validation_individual_loss:
+                for loss_name, loss_value in validation_individual_loss.items():
+                    log_data[f"val/{loss_name}"] = loss_value
             
             wandb.log(log_data, step=global_step) # Log metrics against global_step
             # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 

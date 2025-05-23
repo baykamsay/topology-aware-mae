@@ -181,8 +181,8 @@ class FCMAE(nn.Module):
     def forward(self, imgs, mask_ratio=0.6):
         x, mask = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(x, mask)
-        loss = self.loss_func(imgs, pred, mask)
-        return loss, pred, mask
+        loss, individual_losses = self.loss_func(imgs, pred, mask)
+        return loss, pred, mask, individual_losses
     
     
 def convnextv2_atto(**kwargs):

@@ -45,7 +45,7 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
 
     with torch.no_grad():
         # Get model predictions: loss, pred_patches, binary_mask (0=keep, 1=remove)
-        loss, pred_patches, binary_mask = model(samples, mask_ratio=config.get('model', {}).get('mask_ratio', 0.6))
+        loss, pred_patches, binary_mask, individual_losses = model(samples, mask_ratio=config.get('model', {}).get('mask_ratio', 0.6))
 
         # Reshape binary_mask from (N, L) to (N, 1, H_patch, W_patch)
         num_patches_side = int(binary_mask.shape[1]**0.5)

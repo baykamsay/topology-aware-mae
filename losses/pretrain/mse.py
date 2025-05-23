@@ -38,4 +38,4 @@ class MaskedMSELoss(nn.Module):
         loss = loss.mean(dim=-1) # [N, L], mean loss per patch over P*P*C dimensions
 
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        return loss
+        return loss, {}

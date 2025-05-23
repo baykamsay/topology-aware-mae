@@ -1,12 +1,14 @@
 import logging
 from functools import partial
 from .mse import MaskedMSELoss
+from .betti_matching import BettiMatchingWithMSELoss
 
 logger = logging.getLogger(__name__)
 
 # Registry of loss functions
 loss_registry = {
     "mse": MaskedMSELoss,
+    "betti_matching": BettiMatchingWithMSELoss
 }
 
 def get_loss_function(config: dict, model) -> callable:
