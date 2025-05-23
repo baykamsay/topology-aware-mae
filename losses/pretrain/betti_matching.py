@@ -25,6 +25,7 @@ class BettiMatchingWithMSELoss(nn.Module):
         super().__init__()
         self.patchify = model.patchify
         self.unpatchify = model.unpatchify
+        self.norm_pix_loss = norm_pix_loss
         self.alpha = alpha
 
         # Initialize losses
@@ -36,8 +37,21 @@ class BettiMatchingWithMSELoss(nn.Module):
             topology_weights=topology_weights, 
             sphere=sphere,
             include_background=True,
+            alpha=1.,
             use_base_loss=False)
-        self.MSELoss = MaskedMSELoss(model, norm_pix_loss=norm_pix_loss)
+        # self.MSELoss = MaskedMSELoss(model, norm_pix_loss=False)
+    
+    def calculate_mse_loss(self, target, pred, mask):
+        """
+        target: [N, L, p*p*3]
+        pred: [N, L, p*p*3]
+        mask: [N, L], 0 is keep, 1 is remove
+        """
+        loss = (pred - target) ** 2
+        loss = loss.mean(dim=-1) # [N, L], mean loss per patch over P*P*C dimensions
+
+        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+        return loss
 
     def forward(self, imgs, pred, mask):
         """
@@ -45,16 +59,32 @@ class BettiMatchingWithMSELoss(nn.Module):
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove
         """
+
+        if len(pred.shape) == 4:
+            n, c, _, _ = pred.shape
+            pred = pred.reshape(n, c, -1)
+            pred = torch.einsum('ncl->nlc', pred)
+
+        # Normalize target patches
+        target = self.patchify(imgs)
+
+        target_norm = target
+        pred_denorm = pred
+        if self.norm_pix_loss:
+            mean = target.mean(dim=-1, keepdim=True)
+            var = target.var(dim=-1, keepdim=True)
+            target_norm = (target - mean) / (var + 1.e-6)**.5
+            pred_denorm = pred * (var + 1.e-6)**0.5 + mean
+
         # Compute masked MSE loss
-        mse_loss, _ = self.MSELoss(imgs, pred, mask)
+        mse_loss = self.calculate_mse_loss(target_norm, pred, mask)
 
         # Compute Betti Matching loss
-        pred_img = self.unpatchify(pred)
+        # Add unmasked patches from the original image here
+        pred_img = self.unpatchify(pred_denorm)
 
         pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
         target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
-        
-        # possibly add normalization here
 
         bm_loss = self.BMLoss(pred_img, target_img)
 
