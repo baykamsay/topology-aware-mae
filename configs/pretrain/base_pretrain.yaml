@@ -5,11 +5,11 @@ model:
   decoder_depth: 1
   decoder_embed_dim: 512
   mask_ratio: 0.6
-  norm_pix_loss: true
 
 # Loss Configuration
 loss:
   name: mse
+  norm_pix_loss: true
   
 # Data Configuration
 data:
@@ -39,7 +39,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "buildings_20_norm_fix" # Optional custom run name
   output_dir: "./output/pretrain/test" # Checkpoint dir

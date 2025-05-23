@@ -10,11 +10,11 @@ model:
   # Other parameters
   use_batchnorm: true        # Use batch normalization
   mask_ratio: 0.75
-  norm_pix_loss: true
 
 # Loss Configuration
 loss:
   name: mse
+  norm_pix_loss: true
   
 # Data Configuration
 data:
@@ -32,7 +32,7 @@ training:
   beta2: 0.95
   # Learning Rate Schedule
   learning_rate: 5.0e-4 # Base LR
-  min_lr: 1.0e-5 # Lower bound
+  min_lr: 0.0 # Lower bound
   warmup_epochs: 1
   # Training loop
   epochs: 10 # Adjust as needed
@@ -46,7 +46,7 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "cnn_mae_base_10" # Optional custom run name
+  wandb_run_name: "cnn_mae_base_loss_fix" # Optional custom run name
   output_dir: "./output/pretrain/test" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval

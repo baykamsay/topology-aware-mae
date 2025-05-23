@@ -233,7 +233,7 @@ class MaskedAutoencoderCNN(nn.Module):
         use_checkpointing: bool = False, # Placeholder
         mask_ratio: float = 0.75,
         # Loss
-        norm_pix_loss: bool = False,
+        # norm_pix_loss: bool = False,
         loss_config: Dict[str, Any] = {'name': 'mse'}
     ):
         """
@@ -247,10 +247,10 @@ class MaskedAutoencoderCNN(nn.Module):
         self.patch_size = patch_size
         self.in_chans = in_chans
         self.mask_ratio = mask_ratio
-        self.norm_pix_loss = norm_pix_loss
+        # self.norm_pix_loss = norm_pix_loss
 
         # loss function
-        self.loss_func = get_loss_function(loss_config)
+        self.loss_func = get_loss_function(loss_config, self)
         if self.loss_func is None:
             raise ValueError(f"Loss function {loss_config['name']} not found.")
 
@@ -503,28 +503,28 @@ class MaskedAutoencoderCNN(nn.Module):
 
         return pred_patches
 
-    def forward_loss(self, imgs, pred, mask):
-        """
-        imgs: [N, 3, H, W]
-        pred: [N, L, p*p*3]
-        mask: [N, L], 0 is keep, 1 is remove
-        """
-        if len(pred.shape) == 4:
-            n, c, _, _ = pred.shape
-            pred = pred.reshape(n, c, -1)
-            pred = torch.einsum('ncl->nlc', pred)
+    # def forward_loss(self, imgs, pred, mask):
+    #     """
+    #     imgs: [N, 3, H, W]
+    #     pred: [N, L, p*p*3]
+    #     mask: [N, L], 0 is keep, 1 is remove
+    #     """
+    #     if len(pred.shape) == 4:
+    #         n, c, _, _ = pred.shape
+    #         pred = pred.reshape(n, c, -1)
+    #         pred = torch.einsum('ncl->nlc', pred)
 
-        target = self.patchify(imgs)
+    #     target = self.patchify(imgs)
 
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6)**.5
+    #     if self.norm_pix_loss:
+    #         mean = target.mean(dim=-1, keepdim=True)
+    #         var = target.var(dim=-1, keepdim=True)
+    #         target = (target - mean) / (var + 1.e-6)**.5
 
-        loss = self.loss_func(pred, target)
+    #     loss = self.loss_func(pred, target)
 
-        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        return loss
+    #     loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+    #     return loss
 
     def forward(self, imgs: torch.Tensor, mask_ratio: Optional[float] = None, return_intermediate: bool = False) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor]]]:
         """
@@ -556,73 +556,9 @@ class MaskedAutoencoderCNN(nn.Module):
         self.last_pred_patches = pred_patches.clone().detach()
         self.last_target_patches = target_patches.clone().detach()
 
-        loss = self.forward_loss(imgs, pred_patches, mask)
+        loss = self.loss_func(imgs, pred_patches, mask)
 
         return loss, pred_patches, mask
-
-
-    # --- get_reconstructed_images, no_weight_decay, get_encoder, model variants remain the same ---
-    # ... (rest of the methods and model functions from previous version) ...
-    # def get_reconstructed_images(self, imgs: Optional[torch.Tensor] = None, mask_ratio: Optional[float] = None,
-    #                              pred_processor: Optional[callable] = None) -> Tuple[torch.Tensor, torch.Tensor]:
-    #     """
-    #     Get the reconstructed images for visualization.
-    #     Uses the stored results from the last forward pass if available,
-    #     otherwise runs a forward pass.
-
-    #     Args:
-    #         imgs: Input images (N, C, H, W). Only needed if no previous forward pass data stored.
-    #         mask_ratio: Proportion of tokens to mask. Uses model default if None.
-    #         pred_processor: Optional function to process predicted *patches* before unpatchifying
-    #                         (e.g., for normalization-aware visualization).
-    #                         Input: (pred_patches, target_patches), Output: processed_pred_patches.
-
-    #     Returns:
-    #         Tuple of:
-    #             - Reconstructed images (N, C, H, W). Full image with masked patches replaced.
-    #             - Binary patch-level mask (N, L), 1 indicates masked.
-    #     """
-    #     # Check if we have stored results from a previous forward pass
-    #     if self.last_mask is None or self.last_pred_patches is None or self.last_target_patches is None:
-    #         if imgs is None:
-    #             raise ValueError("Input 'imgs' must be provided to get_reconstructed_images if forward pass hasn't been run.")
-    #         # print("Running forward pass for get_reconstructed_images...")
-    #         effective_mask_ratio = mask_ratio if mask_ratio is not None else self.mask_ratio
-    #         with torch.no_grad(): # Avoid gradient calculation
-    #             # Run forward pass - we only need pred, mask, target from the result
-    #             pred_patches, mask, target_patches = self.forward(imgs, effective_mask_ratio)
-    #             # Use the results directly (they are detached in forward now)
-    #     else:
-    #          # Use the stored values
-    #          # print("Using stored results for get_reconstructed_images...")
-    #          mask = self.last_mask
-    #          pred_patches = self.last_pred_patches
-    #          target_patches = self.last_target_patches
-
-    #          # Clear stored values after use to prevent staleness
-    #          self.last_mask = None
-    #          self.last_pred_patches = None
-    #          self.last_target_patches = None
-
-    #     # Process predicted *patches* if a processor is provided
-    #     if pred_processor is not None:
-    #         # Ensure processor gets detached tensors if needed, though they should be already
-    #         pred_patches = pred_processor(pred_patches, target_patches)
-
-    #     # Create the visualization: original patches + predicted masked patches
-    #     patches_combined = target_patches.clone()
-    #     mask_bool = mask.bool() # Ensure boolean mask for indexing (N, L), 1=masked
-
-    #     # Efficiently replace masked patches using boolean indexing
-    #     patches_combined[mask_bool] = pred_patches[mask_bool]
-
-
-    #     # Unpatchify to get the final reconstructed image for visualization
-    #     recon_img_viz = self.unpatchify(patches_combined) # (N, C, H, W)
-
-    #     # Return the visualization image and the patch-level mask
-    #     return recon_img_viz, mask
-
 
     def no_weight_decay(self) -> Dict[str, Any]:
         """

@@ -1,15 +1,15 @@
 import logging
 from functools import partial
-from .mse import mse_loss
+from .mse import MaskedMSELoss
 
 logger = logging.getLogger(__name__)
 
 # Registry of loss functions
 loss_registry = {
-    "mse": mse_loss,
+    "mse": MaskedMSELoss,
 }
 
-def get_loss_function(config: dict) -> callable:
+def get_loss_function(config: dict, model) -> callable:
     """
     Get the loss function based on the configuration.
 
@@ -28,7 +28,7 @@ def get_loss_function(config: dict) -> callable:
         logger.error(f"Loss function '{loss_name}' is not registered. Available: {list(loss_registry.keys())}")
         return None
     
-    loss_fn = loss_registry[loss_name]
+    loss_class = loss_registry[loss_name]
     logger.info(f"Using loss function: {loss_name}")
 
     # Extract additional parameters if needed
@@ -36,6 +36,7 @@ def get_loss_function(config: dict) -> callable:
 
     if loss_params:
         logger.info(f"Loss function parameters: {loss_params}")
-        return partial(loss_fn, **loss_params)
+        loss = loss_class(model, **loss_params)
     else:
-        return loss_fn
+        loss = loss_class(model)
+    return loss

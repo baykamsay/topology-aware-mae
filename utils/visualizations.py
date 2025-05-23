@@ -68,7 +68,7 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
                 pred_patches = torch.einsum('ncl->nlc', pred_patches)
             
             # Fix norm_pix_loss visualization
-            if hasattr(model, 'norm_pix_loss') and model.norm_pix_loss:
+            if config.get('loss', {}).get('norm_pix_loss', False):
                 # If norm_pix_loss is True, we need to normalize pred_patches from target patches
                 samples_patches = model.patchify(samples)
                 mean = samples_patches.mean(dim=-1, keepdim=True)

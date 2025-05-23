@@ -24,7 +24,7 @@ class FCMAE(nn.Module):
                 decoder_embed_dim=512,
                 patch_size=16,
                 mask_ratio=0.6,
-                norm_pix_loss=False,
+                # norm_pix_loss=False,
                 loss_config={'name': 'mse'}):
         super().__init__()
 
@@ -37,11 +37,11 @@ class FCMAE(nn.Module):
         self.num_patches = (img_size // patch_size) ** 2
         self.decoder_embed_dim = decoder_embed_dim
         self.decoder_depth = decoder_depth
-        self.norm_pix_loss = norm_pix_loss
+        # self.norm_pix_loss = norm_pix_loss
         # self.loss_config = loss_config
 
-        # loss function
-        self.loss_func = get_loss_function(loss_config)
+        # loss
+        self.loss_func = get_loss_function(loss_config, self)
         if self.loss_func is None:
             raise ValueError(f"Loss function {loss_config['name']} not found.")
 
@@ -155,33 +155,33 @@ class FCMAE(nn.Module):
         pred = self.pred(x)
         return pred
     
-    def forward_loss(self, imgs, pred, mask):
-        """
-        imgs: [N, 3, H, W]
-        pred: [N, L, p*p*3]
-        mask: [N, L], 0 is keep, 1 is remove
-        """
-        if len(pred.shape) == 4:
-            n, c, _, _ = pred.shape
-            pred = pred.reshape(n, c, -1)
-            pred = torch.einsum('ncl->nlc', pred)
+    # def forward_loss(self, imgs, pred, mask):
+    #     """
+    #     imgs: [N, 3, H, W]
+    #     pred: [N, L, p*p*3]
+    #     mask: [N, L], 0 is keep, 1 is remove
+    #     """
+    #     if len(pred.shape) == 4:
+    #         n, c, _, _ = pred.shape
+    #         pred = pred.reshape(n, c, -1)
+    #         pred = torch.einsum('ncl->nlc', pred)
 
-        target = self.patchify(imgs)
+    #     target = self.patchify(imgs)
 
-        if self.norm_pix_loss:
-            mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target = (target - mean) / (var + 1.e-6)**.5
+    #     if self.norm_pix_loss:
+    #         mean = target.mean(dim=-1, keepdim=True)
+    #         var = target.var(dim=-1, keepdim=True)
+    #         target = (target - mean) / (var + 1.e-6)**.5
 
-        loss = self.loss_func(pred, target)
+    #     loss = self.loss_func(pred, target)
 
-        loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
-        return loss
+    #     loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
+    #     return loss
     
     def forward(self, imgs, mask_ratio=0.6):
         x, mask = self.forward_encoder(imgs, mask_ratio)
         pred = self.forward_decoder(x, mask)
-        loss = self.forward_loss(imgs, pred, mask)
+        loss = self.loss_func(imgs, pred, mask)
         return loss, pred, mask
     
     
@@ -228,4 +228,9 @@ def convnextv2_huge(**kwargs):
 def convnextv2_test(**kwargs):
     model = FCMAE(
         depths=[2, 6, 2], dims=[128, 256, 512], **kwargs)
+    return model
+
+def convnextv2_8(**kwargs):
+    model = FCMAE(
+        depths=[2, 6], dims=[128, 256], **kwargs)
     return model
