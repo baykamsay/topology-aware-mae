@@ -48,7 +48,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "cnn_mae_bm_norm_fix_2" # Optional custom run name
   output_dir: "./output/pretrain/test" # Checkpoint dir

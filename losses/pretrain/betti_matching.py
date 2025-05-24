@@ -80,8 +80,10 @@ class BettiMatchingWithMSELoss(nn.Module):
         mse_loss = self.calculate_mse_loss(target_norm, pred, mask)
 
         # Compute Betti Matching loss
-        # Add unmasked patches from the original image here
-        pred_img = self.unpatchify(pred_denorm)
+        # Combine masked patches from prediction with unmasked patches from target
+        mask_expanded = mask.unsqueeze(-1)
+        pred_patches = mask_expanded * pred_denorm + (1 - mask_expanded) * target
+        pred_img = self.unpatchify(pred_patches)
 
         pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
         target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
