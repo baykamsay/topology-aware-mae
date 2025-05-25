@@ -53,10 +53,11 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "cnn_mae_bm_0.5" # Optional custom run name
-  output_dir: "./output/pretrain/bm_0_5" # Checkpoint dir
+  wandb_run_name: "cnn_mae_bm_test" # Optional custom run name
+  wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
+  output_dir: "./output/pretrain/test" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 1 # visualization interval
-  checkpointing: true
+  checkpointing: false

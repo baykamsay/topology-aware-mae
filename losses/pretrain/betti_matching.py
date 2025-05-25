@@ -2,6 +2,7 @@
 Betti Matching Loss
 """
 
+import os
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
@@ -32,10 +33,17 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha_warmup_epochs = alpha_warmup_epochs
         self.alpha_mse_treshold = alpha_mse_treshold
 
+        try:
+            num_processes = int(os.getenv('SLURM_CPUS_PER_TASK', '16'))
+            if num_processes <= 0: # Ensure positive
+                num_processes = 16
+        except ValueError:
+            num_processes = 16 # Fallback if conversion fails
+
         # Initialize losses
         self.BMLoss = BettiMatchingLoss(
             filtration_type=filtration,
-            num_processes=16,
+            num_processes=num_processes,
             push_unmatched_to_1_0=push_unmatched_to_1_0, 
             barcode_length_threshold=barcode_length_threshold, 
             topology_weights=topology_weights, 

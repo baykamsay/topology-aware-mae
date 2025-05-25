@@ -202,7 +202,7 @@ def main(args):
                 config=config, # Log the entire config
                 # dir=output_dir, # Optional: Save wandb files in the run's output directory
                 resume='allow', # Allow resuming previous runs if id is reused (useful with checkpointing)
-                # id=wandb_run_id # Optionally set an ID for explicit resuming, can be generated or from checkpoint
+                id=log_config.get('wandb_run_id', None) # Optionally set an ID for explicit resuming, can be generated or from checkpoint
             )
             logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
             # Optionally watch the model (can increase overhead)
