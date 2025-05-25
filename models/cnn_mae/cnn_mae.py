@@ -526,7 +526,7 @@ class MaskedAutoencoderCNN(nn.Module):
     #     loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
     #     return loss
 
-    def forward(self, imgs: torch.Tensor, mask_ratio: Optional[float] = None, return_intermediate: bool = False) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor]]]:
+    def forward(self, imgs: torch.Tensor, mask_ratio: Optional[float] = None, epoch: int = -1, return_intermediate: bool = False) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor]]]:
         """
         Forward pass of the CNN-MAE model. Output matches ViT MAE format.
         """
@@ -556,7 +556,7 @@ class MaskedAutoencoderCNN(nn.Module):
         self.last_pred_patches = pred_patches.clone().detach()
         self.last_target_patches = target_patches.clone().detach()
 
-        loss, individual_losses = self.loss_func(imgs, pred_patches, mask)
+        loss, individual_losses = self.loss_func(imgs, pred_patches, mask, epoch)
 
         return loss, pred_patches, mask, individual_losses
 

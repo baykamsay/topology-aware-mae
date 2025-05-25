@@ -16,11 +16,12 @@ class MaskedMSELoss(nn.Module):
         self.patchify = model.patchify
         self.norm_pix_loss = norm_pix_loss
 
-    def forward(self, imgs, pred, mask):
+    def forward(self, imgs, pred, mask, epoch):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove
+        epoch: int, current training epoch (not used here)
         """
         if len(pred.shape) == 4:
             n, c, _, _ = pred.shape

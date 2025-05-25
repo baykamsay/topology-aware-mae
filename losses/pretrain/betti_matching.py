@@ -16,7 +16,9 @@ class BettiMatchingWithMSELoss(nn.Module):
     def __init__(self,
                  model,
                  norm_pix_loss=False,
-                 alpha=0.5, 
+                 alpha=0.5,
+                 alpha_warmup_epochs=0,
+                 alpha_mse_treshold=0.0,
                  filtration='superlevel', 
                  push_unmatched_to_1_0=True, 
                  barcode_length_threshold=0.0, # ignore barcodes with length < threshold, set to a small value
@@ -27,6 +29,8 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.unpatchify = model.unpatchify
         self.norm_pix_loss = norm_pix_loss
         self.alpha = alpha
+        self.alpha_warmup_epochs = alpha_warmup_epochs
+        self.alpha_mse_treshold = alpha_mse_treshold
 
         # Initialize losses
         self.BMLoss = BettiMatchingLoss(
@@ -53,11 +57,12 @@ class BettiMatchingWithMSELoss(nn.Module):
         loss = (loss * mask).sum() / mask.sum()  # mean loss on removed patches
         return loss
 
-    def forward(self, imgs, pred, mask):
+    def forward(self, imgs, pred, mask, epoch):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
         mask: [N, L], 0 is keep, 1 is remove
+        epoch: current training epoch
         """
 
         if len(pred.shape) == 4:
@@ -91,7 +96,14 @@ class BettiMatchingWithMSELoss(nn.Module):
         bm_loss = self.BMLoss(pred_img, target_img)
 
         # Combine losses
-        loss = mse_loss + self.alpha * bm_loss
+        alpha = self.alpha
+        if epoch >= 0 and epoch < self.alpha_warmup_epochs:
+            alpha = 0
+
+        if self.alpha_mse_treshold > 1e-6 and mse_loss.item() > self.alpha_mse_treshold:
+            alpha = 0
+
+        loss = mse_loss + alpha * bm_loss
         return loss, {
             "bm_loss": bm_loss,
             "mse_loss": mse_loss

@@ -73,9 +73,9 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
             if use_mixed_precision and device.type == 'cuda':
                 with torch.amp.autocast('cuda'):
                     # The model's forward method returns: loss, predicted_patches, mask
-                    loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+                    loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
             else:
-                loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6))
+                loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
             
             total_val_loss += loss.item()
             num_val_batches += 1
@@ -464,11 +464,11 @@ def main(args):
             # Mixed precision forward pass
             if use_mixed_precision and grad_scaler:
                 with torch.amp.autocast('cuda'):
-                    loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                    loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6), epoch=epoch)
                 loss = loss / grad_acc_steps # Scale loss for gradient accumulation
                 grad_scaler.scale(loss).backward()
             else: # Standard precision
-                loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6))
+                loss, _, _, individual_losses = model(samples, mask_ratio=model_config.get('mask_ratio', 0.6), epoch=epoch)
                 loss = loss / grad_acc_steps
                 loss.backward()
             
