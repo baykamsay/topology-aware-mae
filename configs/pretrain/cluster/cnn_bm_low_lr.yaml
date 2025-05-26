@@ -15,7 +15,7 @@ model:
 loss:
   name: betti_matching
   norm_pix_loss: true
-  alpha: 0.5
+  alpha: 0.05
   alpha_warmup_epochs: 0
   alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
   filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
@@ -26,8 +26,8 @@ loss:
 # Data Configuration
 data:
   input_size: 56
-  data_path: "./data/pretrain/roads_mini/train"
-  eval_data_path: "./data/pretrain/roads_mini/val"
+  data_path: "/vol/miltank/users/sayb/datasets/roads_mini/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/roads_mini/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
@@ -38,12 +38,12 @@ training:
   beta1: 0.9
   beta2: 0.95
   # Learning Rate Schedule
-  learning_rate: 1.e-3 # Base LR
+  learning_rate: 5.e-4 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 4
+  warmup_epochs: 5
   # Training loop
-  epochs: 80 # Adjust as needed
-  batch_size: 256 # Adjust based on GPU memory
+  epochs: 100
+  batch_size: 1024
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -51,13 +51,13 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: false
+  enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "cnn_mae_bm_test" # Optional custom run name
-  wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
-  output_dir: "./output/pretrain/test" # Checkpoint dir
+  wandb_run_name: "cnn_mae_bm_low_lr" # Optional custom run name
+  wandb_run_id: "cnn_mae_bm_low_lr" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/cnn_mae_bm_low_lr" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 1 # visualization interval
-  checkpointing: false
+  checkpointing: true

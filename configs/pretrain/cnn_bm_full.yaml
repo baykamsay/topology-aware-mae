@@ -42,8 +42,8 @@ training:
   min_lr: 0.0 # Lower bound
   warmup_epochs: 5
   # Training loop
-  epochs: 100 # Adjust as needed
-  batch_size: 256 # Adjust based on GPU memory
+  epochs: 100
+  batch_size: 1024
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
