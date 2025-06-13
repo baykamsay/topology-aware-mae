@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 import torchvision.transforms as transforms
 
 class RoadsSegmentationDataset(Dataset):
-    def __init__(self, root_dir, image_transform=None, mask_transform=None):
+    def __init__(self, root_dir, joint_transform=None, image_transform=None, mask_transform=None):
         """
         Args:
             root_dir (str): Directory with all the images and masks.
@@ -23,6 +23,7 @@ class RoadsSegmentationDataset(Dataset):
         
         self.image_filenames = sorted(os.listdir(self.image_dir))
         
+        self.joint_transform = joint_transform
         self.image_transform = image_transform
         self.mask_transform = mask_transform
 
@@ -42,6 +43,9 @@ class RoadsSegmentationDataset(Dataset):
         except Exception as e:
             raise RuntimeError(f"Error loading image/mask {self.image_filenames[idx]} at index {idx}. Original error: {e}")
 
+        # Apply joint transformations if provided
+        if self.joint_transform:
+            image, mask = self.joint_transform(image, mask)
 
         if self.image_transform:
             image = self.image_transform(image)

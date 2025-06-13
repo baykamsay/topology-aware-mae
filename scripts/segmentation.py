@@ -14,6 +14,7 @@ import numpy as np
 import wandb
 import torch.optim as optim
 import torchvision.transforms as transforms
+import torchvision.transforms.functional as F
 from torch.utils.data import DataLoader
 from timm.scheduler.cosine_lr import CosineLRScheduler
 
@@ -44,6 +45,29 @@ def get_args_parser():
     )
 
     return parser
+
+class JointTransforms:
+    def __init__(self, h_flip_prob=0.5, v_flip_prob=0.5, rotation_degrees=0):
+        self.h_flip_prob = h_flip_prob
+        self.v_flip_prob = v_flip_prob
+        self.rotation_degrees = rotation_degrees
+
+    def __call__(self, image, mask): # image and mask are PIL.Image objects
+        if random.random() < self.h_flip_prob:
+            image = F.hflip(image)
+            mask = F.hflip(mask)
+
+        if random.random() < self.v_flip_prob:
+            image = F.vflip(image)
+            mask = F.vflip(mask)
+
+        if self.rotation_degrees > 0:
+            # angle = random.uniform(-self.rotation_degrees, self.rotation_degrees)
+            angle = random.choice([0, 90, 180, 270]) # For simplicity, use fixed angles
+            image = F.rotate(image, angle, interpolation=transforms.InterpolationMode.BILINEAR)
+            mask = F.rotate(mask, angle, interpolation=transforms.InterpolationMode.NEAREST, fill=0) # fill mask background with 0
+
+        return image, mask
 
 # For test purposes, define metrics separately
 def calculate_dice_score(preds, targets, smooth=1e-6):
@@ -195,6 +219,12 @@ def main(args):
     img_std = [0.19191039, 0.18239774, 0.18225507]
     input_size = data_config.get('input_size', 56) 
 
+    joint_transform = JointTransforms(
+        h_flip_prob=0.5,
+        v_flip_prob=0.5,
+        rotation_degrees=180
+    )
+
     train_image_transform = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
@@ -218,6 +248,7 @@ def main(args):
     
     train_dataset = RoadsSegmentationDataset(
         root_dir=train_dataset_path,
+        joint_transform=joint_transform,
         image_transform=train_image_transform 
         # mask_transform=train_mask_transform
     )
@@ -290,7 +321,30 @@ def main(args):
     beta2 = training_config.get('beta2', 0.95)
 
     # Might apply weight decay differently or use different LRs
-    parameters_to_optimize = model.parameters() 
+    # Freeze encoder parameters
+    if hasattr(model, 'encoder'):
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+        logger.info("Froze encoder parameters.")
+        
+        # Parameters to optimize are only from the decoder
+        if hasattr(model, 'decoder'):
+            parameters_to_optimize = model.decoder.parameters()
+            logger.info("Optimizing only decoder parameters.")
+        elif hasattr(model, 'decoder_stages'):
+            parameters_to_optimize = []
+            # If model has decoder_stages, optimize those
+            parameters_to_optimize.extend(list(model.decoder_stages.parameters()))
+            logger.info("Optimizing decoder stages parameters.")
+            # If model has a final conv layer, optimize that too
+            if hasattr(model, 'final_conv'):
+                parameters_to_optimize.extend(list(model.final_conv.parameters()))
+        else:
+            logger.warning("Model does not have a 'decoder' attribute. Optimizing all parameters.")
+            parameters_to_optimize = filter(lambda p: p.requires_grad, model.parameters())
+    else:
+        logger.warning("Model does not have an 'encoder' attribute. Optimizing all parameters.")
+        parameters_to_optimize = model.parameters()
 
     if optimizer_name == 'adamw':
         optimizer = optim.AdamW(
