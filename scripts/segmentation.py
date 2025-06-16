@@ -8,10 +8,14 @@ import sys
 import shutil
 import logging
 import pprint
+import timm.scheduler
+import timm.scheduler.scheduler
+import timm.utils
 import torch
 import random
 import numpy as np
 import wandb
+import timm
 import torch.optim as optim
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as F
@@ -123,6 +127,46 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
 
     return avg_val_loss, {"dice_score": avg_dice_score}
 
+def unfreeze_encoder(model, optimizer, lr, weight_decay, beta1, beta2):
+    """
+    Unfreeze encoder parameters and add them to the optimizer.
+    
+    Args:
+        model: The segmentation model
+        optimizer: Current optimizer (will add new param group)
+        lr: Learning rate for the encoder parameters
+        weight_decay: Weight decay for the encoder
+        beta1, beta2: Beta parameters for AdamW
+    
+    Returns:
+        bool: True if unfreezing was successful
+    """
+    if not hasattr(model, 'encoder'):
+        logger.error("Model does not have an encoder attribute. Cannot unfreeze.")
+        return False
+    
+    # Unfreeze encoder parameters
+    encoder_params = []
+    for param in model.encoder.parameters():
+        if not param.requires_grad:
+            param.requires_grad = True
+            encoder_params.append(param)
+    
+    if not encoder_params:
+        logger.warning("No frozen encoder parameters found to unfreeze.")
+        return False
+    
+    # Add encoder parameters to optimizer as a new param group
+    optimizer.add_param_group({
+        'params': encoder_params,
+        'lr': lr,
+        'weight_decay': weight_decay,
+        'betas': (beta1, beta2) if hasattr(optimizer, 'param_groups') and 'betas' in optimizer.param_groups[0] else None
+    })
+    
+    logger.info(f"Successfully unfroze {len(encoder_params)} encoder parameters and added them to optimizer with LR: {lr}")
+    return True
+
 def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
     """
     Saves a training checkpoint.
@@ -171,6 +215,8 @@ def main(args):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # torch.use_deterministic_algorithms(True) # For exact reproducibility, bad for performance
     # monai.utils.set_determinism(seed=config.TRAIN.SEED) # type: ignore
 
     def seed_worker(worker_id):
@@ -207,7 +253,8 @@ def main(args):
     # ---- Start setting up device ----
     if torch.cuda.is_available():
         device = torch.device('cuda')
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = True # Switch for better performance
+        torch.backends.cudnn.benchmark = False
         logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
     else:
         device = torch.device('cpu')
@@ -320,12 +367,13 @@ def main(args):
     beta1 = training_config.get('beta1', 0.9)
     beta2 = training_config.get('beta2', 0.95)
 
-    # Might apply weight decay differently or use different LRs
     # Freeze encoder parameters
     if hasattr(model, 'encoder'):
         for param in model.encoder.parameters():
             param.requires_grad = False
         logger.info("Froze encoder parameters.")
+
+        encoder_frozen = True
         
         # Parameters to optimize are only from the decoder
         if hasattr(model, 'decoder'):
@@ -345,6 +393,7 @@ def main(args):
     else:
         logger.warning("Model does not have an 'encoder' attribute. Optimizing all parameters.")
         parameters_to_optimize = model.parameters()
+        encoder_frozen = False
 
     if optimizer_name == 'adamw':
         optimizer = optim.AdamW(
@@ -384,10 +433,11 @@ def main(args):
     cycle_mult = training_config.get('cycle_mult', 1.0)
     cycle_decay = training_config.get('cycle_decay', 0.5)
 
-    
-    if cycle_limit > 1 and cycle_mult == 1.0:
+    if cycle_limit < 1 or cycle_mult == 0.0:
+        first_cycle_epochs = total_epochs - warmup_epochs
+    elif cycle_limit > 1 and cycle_mult == 1.0:
         # All cycles have the same length
-        first_cycle_epochs = total_epochs / cycle_limit
+        first_cycle_epochs = (total_epochs - warmup_epochs) / cycle_limit
     else:
         # If cycles change length, or only one cycle, t_initial usually spans all steps unless modified by cycle_mult
         # For simplicity with timm's scheduler, t_initial is often the length of the first cycle.
@@ -398,7 +448,7 @@ def main(args):
         # If cycle_mult != 1, the calculation is more complex to fit total_epochs.
         # A common approach: set t_initial to (total_steps / cycle_limit) if cycle_mult is 1,
         # or make t_initial the length of the first desired cycle.
-        first_cycle_epochs = total_epochs / cycle_limit if cycle_mult == 1.0 else total_epochs / sum([cycle_mult**i for i in range(cycle_limit)]) if cycle_mult !=1 else total_epochs
+        first_cycle_epochs = (total_epochs - warmup_epochs) / sum([cycle_mult**i for i in range(cycle_limit)])
 
     t_initial_steps = int(num_training_steps_per_epoch * first_cycle_epochs)
     lr_scheduler = CosineLRScheduler(
@@ -450,6 +500,7 @@ def main(args):
             lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             start_epoch = checkpoint['epoch']
             global_step = checkpoint.get('global_step', start_epoch * num_training_steps_per_epoch) # Restore global_step
+            encoder_frozen = checkpoint.get('encoder_frozen', True)
             
             if 'best_val_loss' in checkpoint:
                 best_val_loss = checkpoint['best_val_loss']
@@ -472,6 +523,16 @@ def main(args):
     logger.info(f"Starting finetuning for {total_epochs} epochs...")
 
     for epoch in range(start_epoch, total_epochs):
+        # Check to unfreeze encoder if needed
+        if encoder_frozen and epoch >= first_cycle_epochs + warmup_epochs:
+            logger.info(f"Unfreezing encoder parameters at epoch {epoch+1}.")
+            
+            encoder_lr = optimizer.param_groups[0]['lr'] # Get current decoder LR
+            success = unfreeze_encoder(model, optimizer, encoder_lr, weight_decay, beta1, beta2)
+            if success:
+                encoder_frozen = False
+                # Update scheduler if needed
+                
         model.train()
         running_loss = 0.0
         optimizer.zero_grad() # Reset gradients at the start of each epoch
@@ -568,6 +629,7 @@ def main(args):
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': lr_scheduler.state_dict(),
                     'best_val_metric': best_val_metric,
+                    'encoder_frozen': encoder_frozen, # Save if encoder was frozen
                     'config': config # Save config for reference, optional
                 }
                 if use_mixed_precision and grad_scaler:

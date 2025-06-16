@@ -181,6 +181,8 @@ def main(args):
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    # torch.use_deterministic_algorithms(True) # For exact reproducibility, bad for performance
     # monai.utils.set_determinism(seed=config.TRAIN.SEED) # type: ignore
 
     def seed_worker(worker_id):
@@ -217,7 +219,8 @@ def main(args):
     # ---- Start setting up device ----
     if torch.cuda.is_available():
         device = torch.device('cuda')
-        torch.backends.cudnn.benchmark = True
+        torch.backends.cudnn.deterministic = True # Switch for better performance
+        torch.backends.cudnn.benchmark = False
         logger.info(f"Using GPU: {torch.cuda.get_device_name(0)}")
     else:
         device = torch.device('cpu')
