@@ -1,5 +1,6 @@
 import logging
 import torch.nn as nn
+from topolosses.losses.betti_matching import BettiMatchingLoss
 from .dice import DiceLoss
 
 logger = logging.getLogger(__name__)
@@ -7,7 +8,7 @@ logger = logging.getLogger(__name__)
 # Registry of segmentation loss functions
 loss_registry = {
     "dice": DiceLoss,
-    # Add other segmentation losses here
+    "betti_matching": BettiMatchingLoss,
 }
 
 def get_segmentation_loss(config: dict) -> nn.Module:

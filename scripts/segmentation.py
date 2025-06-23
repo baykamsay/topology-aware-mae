@@ -28,6 +28,7 @@ sys.path.insert(0, project_root)
 
 from datasets.segmentation_dataset import RoadsSegmentationDataset
 from utils.config import load_config
+from utils.metrics import calculate_segmentation_metrics
 from utils.visualizations import log_segmentation_visualizations
 from models.cnn_mae import cnn_seg
 from losses.segmentation import get_segmentation_loss
@@ -73,27 +74,13 @@ class JointTransforms:
 
         return image, mask
 
-# For test purposes, define metrics separately
-def calculate_dice_score(preds, targets, smooth=1e-6):
-    """Calculates Dice score for a batch."""
-    # preds are logits from model, targets are binary masks
-    preds_probs = torch.sigmoid(preds)
-    preds_binary = (preds_probs > 0.5).float()
-
-    preds_flat = preds_binary.view(-1)
-    targets_flat = targets.view(-1)
-
-    intersection = (preds_flat * targets_flat).sum()
-    dice = (2. * intersection + smooth) / (preds_flat.sum() + targets_flat.sum() + smooth)
-    return dice.item()
-
 def validate(val_loader, model, criterion, device, config, use_mixed_precision, epoch):
     """
     Performs validation on the validation dataset.
     """
     model.eval()  # Set model to evaluation mode
     total_val_loss = 0.0
-    total_dice_score = 0.0
+    metric_totals = {}
     num_val_batches = 0
 
     with torch.no_grad():  # Disable gradient calculations
@@ -111,21 +98,25 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
                 loss = criterion(outputs, masks)
             
             total_val_loss += loss.item()
-            dice_score_batch = calculate_dice_score(outputs, masks) # Using the helper
-            total_dice_score += dice_score_batch
             num_val_batches += 1
 
+            # Accumulate metrics
+            for metric_name, metric_value in calculate_segmentation_metrics(outputs, masks).items():
+                if metric_name not in metric_totals:
+                    metric_totals[metric_name] = 0.0
+                metric_totals[metric_name] += metric_value.item() if isinstance(metric_value, torch.Tensor) else metric_value
+
             if (batch_idx + 1) % config.get('logging', {}).get('log_interval_val', 50) == 0: # Optional: batch-level val logging
-                 logger.debug(f"Validation Epoch {epoch+1} - Batch {batch_idx+1}/{len(val_loader)} | Batch Loss: {loss.item():.4f} | Batch Dice: {dice_score_batch:.4f}")
+                 logger.debug(f"Validation Epoch {epoch+1} - Batch {batch_idx+1}/{len(val_loader)} | Batch Loss: {loss.item():.4f}")
 
     if num_val_batches == 0:
         logger.warning("Validation loader was empty. Returning 0 validation loss and 0 Dice score.")
         return 0.0, {"dice_score": 0.0}
         
     avg_val_loss = total_val_loss / num_val_batches
-    avg_dice_score = total_dice_score / num_val_batches
+    avg_metrics = {k: v / num_val_batches for k, v in metric_totals.items()}
 
-    return avg_val_loss, {"dice_score": avg_dice_score}
+    return avg_val_loss, avg_metrics
 
 def unfreeze_encoder(model, optimizer, lr, weight_decay, beta1, beta2):
     """
