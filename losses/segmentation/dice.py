@@ -12,7 +12,7 @@ class DiceLoss(nn.Module):
         super(DiceLoss, self).__init__()
         self.smooth = smooth
 
-    def forward(self, inputs, targets):
+    def forward(self, inputs, targets, epoch=None):
         """
         Args:
             inputs (torch.Tensor): Raw logits from the model (N, C, H, W). 

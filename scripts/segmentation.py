@@ -92,10 +92,10 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
             if use_mixed_precision and device.type == 'cuda':
                 with torch.amp.autocast(device_type='cuda'):
                     outputs = model(images)
-                    loss = criterion(outputs, masks)
+                    loss = criterion(outputs, masks, epoch=epoch)
             else: # No mixed precision
                 outputs = model(images)
-                loss = criterion(outputs, masks)
+                loss = criterion(outputs, masks, epoch=epoch)
             
             total_val_loss += loss.item()
             num_val_batches += 1
@@ -515,7 +515,7 @@ def main(args):
 
     for epoch in range(start_epoch, total_epochs):
         # Check to unfreeze encoder if needed
-        if encoder_frozen and epoch >= first_cycle_epochs + warmup_epochs:
+        if encoder_frozen and epoch >= training_config.get('frozen_encoder_epochs', 0):
             logger.info(f"Unfreezing encoder parameters at epoch {epoch+1}.")
             
             encoder_lr = optimizer.param_groups[0]['lr'] # Get current decoder LR
@@ -539,12 +539,12 @@ def main(args):
             if use_mixed_precision and grad_scaler: # grad_scaler and use_mixed_precision should be defined
                 with torch.amp.autocast('cuda'):
                     outputs = model(images)
-                    loss = criterion(outputs, masks)
+                    loss = criterion(outputs, masks, epoch=epoch)
                 loss = loss / grad_acc_steps
                 grad_scaler.scale(loss).backward()
             else: # Standard precision
                 outputs = model(images)
-                loss = criterion(outputs, masks)
+                loss = criterion(outputs, masks, epoch=epoch)
                 loss = loss / grad_acc_steps
                 loss.backward()
             
