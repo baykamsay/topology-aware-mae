@@ -22,6 +22,7 @@ loss:
   push_unmatched_to_1_0: false
   barcode_length_threshold: 0.2 # ignore barcodes with length < threshold, set to a small value
   sphere: true
+  calculate_channels_separately: true # Calculate Betti numbers for each channel separately
   
 # Data Configuration
 data:

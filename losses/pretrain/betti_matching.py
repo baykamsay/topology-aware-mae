@@ -24,7 +24,8 @@ class BettiMatchingWithMSELoss(nn.Module):
                  push_unmatched_to_1_0=True, 
                  barcode_length_threshold=0.0, # ignore barcodes with length < threshold, set to a small value
                  topology_weights=(1., 1.), # weights for the topology classes in the following order: [matched, unmatched]. Possibly give matched (roads) higher weight
-                 sphere=False,):
+                 sphere=False,
+                 calculate_channels_separately=False):
         super().__init__()
         self.patchify = model.patchify
         self.unpatchify = model.unpatchify
@@ -32,6 +33,7 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha = alpha
         self.alpha_warmup_epochs = alpha_warmup_epochs
         self.alpha_mse_treshold = alpha_mse_treshold
+        self.calculate_channels_separately = calculate_channels_separately
 
         try:
             num_processes = int(os.getenv('SLURM_CPUS_PER_TASK', '16'))
@@ -98,10 +100,19 @@ class BettiMatchingWithMSELoss(nn.Module):
         pred_patches = mask_expanded * pred_denorm + (1 - mask_expanded) * target
         pred_img = self.unpatchify(pred_patches)
 
-        pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
-        target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
+        if self.calculate_channels_separately:
+            # Calculate Betti Matching loss for each channel separately
+            bm_loss = 0.0
+            for c in range(pred_img.shape[1]):
+                pred_channel = pred_img[:, c, :, :].unsqueeze(1)
+                target_channel = imgs[:, c, :, :].unsqueeze(1)
+                bm_loss += self.BMLoss(pred_channel, target_channel)
+            bm_loss /= pred_img.shape[1]  # Average over channels
+        else:
+            pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
+            target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
 
-        bm_loss = self.BMLoss(pred_img, target_img)
+            bm_loss = self.BMLoss(pred_img, target_img)
 
         # Combine losses
         alpha = self.alpha
