@@ -54,9 +54,9 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "cnn_mae_bm_5_warmup_sc" # Optional custom run name
-  wandb_run_id: "cnn_mae_bm_5_warmup_sc" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/cnn_mae_bm_5_warmup_sc" # Checkpoint dir
+  wandb_run_name: "cnn_mae_bm_5_warmup_sc_full" # Optional custom run name
+  wandb_run_id: "cnn_mae_bm_5_warmup_sc_full" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/cnn_mae_bm_5_warmup_sc_full" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
