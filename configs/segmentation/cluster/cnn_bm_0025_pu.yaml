@@ -1,7 +1,7 @@
 # Model Configuration
 model:
   name: cnnseg_small
-  pretrained_path: "/vol/miltank/users/sayb/projects/output/pretrain/slurm_runs/cnn_mae_bm_full_base/latest_checkpoint.pth" # Path to pre-trained model weights
+  pretrained_path: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/cnn_mae_bm_005_sc_full/latest_checkpoint.pth" # Path to pre-trained model weights
   patch_size: 4  # For 56x56 input
   # Encoder parameters
   encoder_embed_dim: 64      # Base dimension for CNN encoder's first stage
@@ -15,8 +15,8 @@ model:
 # Loss Configuration
 loss:
   name: "betti_matching"
-  alpha: 0.05
-  alpha_warmup_epochs: 20
+  alpha: 0.0025
+  alpha_warmup_epochs: 30
   filtration: "superlevel"
   push_unmatched_to_1_0: true
   barcode_length_threshold: 0.0
@@ -44,7 +44,7 @@ training:
   warmup_lr_init: 1.e-3 # Initial LR during warmup
   cycle_limit: 3    # Number of cycles (restarts). E.g., 3 cycles.
   cycle_mult: 1.   # Factor to multiply t_initial by after each cycle. 1.0 means cycles have same length.
-  cycle_decay: 0.75  # Factor to multiply learning rate by after each cycle restart (e.g., LR becomes LR*0.5 after 1st restart).
+  cycle_decay: 1.  # Factor to multiply learning rate by after each cycle restart (e.g., LR becomes LR*0.5 after 1st restart).
   # Training loop
   epochs: 100 # Total number of epochs
   batch_size: 1024 # Adjust based on GPU memory
@@ -57,9 +57,9 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-segmentation" # Your W&B project name
-  wandb_run_name: "cnn_seg_bm_05_full" # Optional custom run name
-  wandb_run_id: "cnn_seg_bm_05_full"
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/segmentation/cnn_seg_bm_05_full" # Checkpoint dir
+  wandb_run_name: "cnn_seg_bm_0025_pu_final" # Optional custom run name
+  wandb_run_id: "cnn_seg_bm_0025_pu_final"
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/segmentation/cnn_seg_bm_0025_pu_final" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations

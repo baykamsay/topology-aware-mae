@@ -70,15 +70,17 @@ def calculate_betti_matching(preds, targets):
     superlevel_betti = BettiMatchingLoss(
         filtration_type="superlevel",
         num_processes=16,
-        push_unmatched_to_1_0=True,
+        push_unmatched_to_1_0=False,
         sigmoid=True,
+        sphere=False,
         use_base_loss=False
     )
     sublevel_betti = BettiMatchingLoss(
         filtration_type="sublevel",
         num_processes=16,
-        push_unmatched_to_1_0=True,
+        push_unmatched_to_1_0=False,
         sigmoid=True,
+        sphere=False,
         use_base_loss=False
     )
 

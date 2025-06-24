@@ -30,4 +30,4 @@ class DiceLoss(nn.Module):
         dice_coeff = (2. * intersection + self.smooth) / (inputs_flat.sum() + targets_flat.sum() + self.smooth)
         
         loss = 1 - dice_coeff
-        return loss
+        return loss, {}

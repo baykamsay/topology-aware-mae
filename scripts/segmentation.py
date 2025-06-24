@@ -81,6 +81,7 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
     model.eval()  # Set model to evaluation mode
     total_val_loss = 0.0
     metric_totals = {}
+    individual_loss_totals = {}
     num_val_batches = 0
 
     with torch.no_grad():  # Disable gradient calculations
@@ -92,13 +93,20 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
             if use_mixed_precision and device.type == 'cuda':
                 with torch.amp.autocast(device_type='cuda'):
                     outputs = model(images)
-                    loss = criterion(outputs, masks, epoch=epoch)
+                    loss, individual_losses = criterion(outputs, masks, epoch=epoch)
             else: # No mixed precision
                 outputs = model(images)
-                loss = criterion(outputs, masks, epoch=epoch)
+                loss, individual_losses = criterion(outputs, masks, epoch=epoch)
             
             total_val_loss += loss.item()
             num_val_batches += 1
+
+            # Accumulate individual losses
+            if individual_losses:
+                for loss_name, loss_value in individual_losses.items():
+                    if loss_name not in individual_loss_totals:
+                        individual_loss_totals[loss_name] = 0.0
+                    individual_loss_totals[loss_name] += loss_value.item()
 
             # Accumulate metrics
             for metric_name, metric_value in calculate_segmentation_metrics(outputs, masks).items():
@@ -115,8 +123,15 @@ def validate(val_loader, model, criterion, device, config, use_mixed_precision, 
         
     avg_val_loss = total_val_loss / num_val_batches
     avg_metrics = {k: v / num_val_batches for k, v in metric_totals.items()}
+    # Calculate averages for individual losses
+    avg_individual_losses = {}
+    if individual_loss_totals:
+        avg_individual_losses = {
+            loss_name: total_loss / num_val_batches 
+            for loss_name, total_loss in individual_loss_totals.items()
+        }
 
-    return avg_val_loss, avg_metrics
+    return avg_val_loss, avg_metrics, avg_individual_losses
 
 def unfreeze_encoder(model, optimizer, lr, weight_decay, beta1, beta2):
     """
@@ -539,12 +554,12 @@ def main(args):
             if use_mixed_precision and grad_scaler: # grad_scaler and use_mixed_precision should be defined
                 with torch.amp.autocast('cuda'):
                     outputs = model(images)
-                    loss = criterion(outputs, masks, epoch=epoch)
+                    loss, individual_losses = criterion(outputs, masks, epoch=epoch)
                 loss = loss / grad_acc_steps
                 grad_scaler.scale(loss).backward()
             else: # Standard precision
                 outputs = model(images)
-                loss = criterion(outputs, masks, epoch=epoch)
+                loss, individual_losses = criterion(outputs, masks, epoch=epoch)
                 loss = loss / grad_acc_steps
                 loss.backward()
             
@@ -567,13 +582,22 @@ def main(args):
             if (batch_idx + 1) % (config.get('logging', {}).get('log_interval', 50) * grad_acc_steps) == 0:
                 current_batch_lr = optimizer.param_groups[0]['lr']
                 log_msg = f"Epoch: {epoch+1}/{total_epochs} | Batch: {batch_idx+1}/{len(train_loader)} (Step: {global_step}) | " \
-                        f"Train Loss: {loss.item() * grad_acc_steps:.4f} | LR: {current_batch_lr:.6e}"
+                        f"Train Loss: {loss.item() * grad_acc_steps:.4f}"
+                if individual_losses:
+                    individual_loss_str = " | ".join([f"{loss_name}: {loss_value.item():.4f}" for loss_name, loss_value in individual_losses.items()])
+                    log_msg += f" | {individual_loss_str}"
+                log_msg += f" | LR: {current_batch_lr:.6e}"
                 logger.info(log_msg)
+
                 if wandb_logger:
-                    wandb.log({
+                    wandb_dict = {
                         "train/loss": loss.item() * grad_acc_steps,
                         "train/lr": current_batch_lr
-                    }, step=global_step)
+                    }
+                    if individual_losses:
+                        for loss_name, loss_value in individual_losses.items():
+                            wandb_dict[f"train/{loss_name}"] = loss_value.item()
+                    wandb.log(wandb_dict, step=global_step)
 
         epoch_loss = running_loss / len(train_loader)
         current_epoch_end_lr = optimizer.param_groups[0]['lr']
@@ -587,7 +611,7 @@ def main(args):
         if (epoch + 1) % log_config.get('val_interval', 1) == 0:
             if val_loader:
                 logger.info(f"--- Starting Validation for Epoch {epoch+1} ---")
-                validation_loss, metrics = validate(
+                validation_loss, metrics, validation_individual_loss = validate(
                     val_loader, 
                     model, 
                     criterion,
@@ -599,6 +623,9 @@ def main(args):
                 log_msg = f"====> Epoch {epoch+1} | Validation Loss: {validation_loss:.4f}"
                 if metrics:
                     individual_loss_str = " | ".join([f"{loss_name}: {loss_value:.4f}" for loss_name, loss_value in metrics.items()])
+                    log_msg += f" | {individual_loss_str}"
+                if validation_individual_loss:
+                    individual_loss_str = " | ".join([f"{loss_name}: {loss_value:.4f}" for loss_name, loss_value in validation_individual_loss.items()])
                     log_msg += f" | {individual_loss_str}"
                 log_msg += f" ===="
                 logger.info(log_msg)
@@ -643,6 +670,10 @@ def main(args):
 
             if metrics:
                 for loss_name, loss_value in metrics.items():
+                    log_data[f"val/{loss_name}"] = loss_value
+            
+            if validation_individual_loss:
+                for loss_name, loss_value in validation_individual_loss.items():
                     log_data[f"val/{loss_name}"] = loss_value
             
             wandb.log(log_data, step=global_step) # Log metrics against global_step

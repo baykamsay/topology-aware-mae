@@ -53,7 +53,7 @@ class BettiMatchingWithDiceLoss(nn.Module):
             targets (torch.Tensor): Ground truth binary masks (N, C, H, W), values 0 or 1.
         """
         bm_loss = self.BMLoss(inputs, targets)
-        dice_loss = self.diceLoss(inputs, targets)
+        dice_loss, _ = self.diceLoss(inputs, targets)
 
         alpha = self.alpha
 
@@ -61,7 +61,10 @@ class BettiMatchingWithDiceLoss(nn.Module):
             alpha = 0
 
         loss = dice_loss + alpha * bm_loss
-        return loss
+        return loss, {
+            "bm_loss": bm_loss,
+            "dice_loss": dice_loss
+        }
 
 
 
