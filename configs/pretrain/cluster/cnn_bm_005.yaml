@@ -27,8 +27,8 @@ loss:
 # Data Configuration
 data:
   input_size: 56
-  data_path: "/vol/miltank/users/sayb/datasets/roads_mini/train"
-  eval_data_path: "/vol/miltank/users/sayb/datasets/roads_mini/val"
+  data_path: "/vol/miltank/users/sayb/datasets/roads_mini_rec/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/roads_mini_rec/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
