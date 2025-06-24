@@ -1,0 +1,67 @@
+# Model Configuration
+model:
+  name: cnnseg_small
+  pretrained_path: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/cnn_mae_mse_full/latest_checkpoint.pth" # Path to pre-trained model weights
+  patch_size: 4  # For 56x56 input
+  # Encoder parameters
+  encoder_embed_dim: 64      # Base dimension for CNN encoder's first stage
+  encoder_depths: [2, 6]  # Number of blocks per stage
+  # Decoder parameters
+  num_classes: 1             # Number of output classes for segmentation
+  # decoder_dim: 256           # Base dimension for CNN decoder
+  # Other parameters
+  use_batchnorm: true        # Use batch normalization
+
+# Loss Configuration
+loss:
+  name: "betti_matching"
+  alpha: 0.0025
+  alpha_warmup_epochs: 30
+  filtration: "superlevel"
+  push_unmatched_to_1_0: true
+  barcode_length_threshold: 0.0
+  sphere: false
+  
+# Data Configuration
+data:
+  dataset_name: "roads"
+  input_size: 56
+  data_path: "/vol/miltank/users/sayb/datasets/roads_mini_seg" # Path to finetuning dataset has "train" and "val" subfolders each with "images" and "masks" subfolders
+  num_workers: 16
+
+# Pre-training Hyperparameters
+training:
+  # Optimizer parameters
+  optimizer: adamw
+  weight_decay: 0.05
+  beta1: 0.9
+  beta2: 0.95
+  frozen_encoder_epochs: 10 # Number of epochs to freeze encoder
+  # Learning Rate Schedule
+  learning_rate: 1.e-4 # Base LR
+  min_lr: 0.0 # Lower bound
+  warmup_epochs: 10
+  warmup_lr_init: 1.e-3 # Initial LR during warmup
+  cycle_limit: 3    # Number of cycles (restarts). E.g., 3 cycles.
+  cycle_mult: 1.   # Factor to multiply t_initial by after each cycle. 1.0 means cycles have same length.
+  cycle_decay: 1.  # Factor to multiply learning rate by after each cycle restart (e.g., LR becomes LR*0.5 after 1st restart).
+  # Training loop
+  epochs: 100 # Total number of epochs
+  batch_size: 1024 # Adjust based on GPU memory
+  gradient_accumulation_steps: 1 # Gradient accumulation steps
+  # Misc
+  mixed_precision: true # Use mixed precision training
+  seed: 42
+
+# Logging & Checkpointing
+logging:
+  enable_wandb: true
+  wandb_project: "topo-conv-mae-segmentation" # Your W&B project name
+  wandb_run_name: "cnn_seg_bm_0025_pu_p_MSE_final" # Optional custom run name
+  wandb_run_id: "cnn_seg_bm_0025_pu_p_MSE_final"
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/segmentation/cnn_seg_bm_0025_pu_p_MSE_final" # Checkpoint dir
+  val_interval: 1 # validation interval
+  log_interval: 1 # wandb log interval
+  include_vis: true # Include visualizations
+  vis_interval: 1 # visualization interval
+  checkpointing: true
