@@ -55,7 +55,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-segmentation" # Your W&B project name
   wandb_run_name: "pretrained_bm_0025_pu_update" # Optional custom run name
   output_dir: "./output/segmentation/test" # Checkpoint dir

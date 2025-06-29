@@ -240,7 +240,7 @@ def main(args):
 
     # Basic pre-training transforms
     train_transform = transforms.Compose([
-        # transforms.RandomResizedCrop(input_size, scale=(0.1, 0.5), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.RandomResizedCrop(input_size, scale=(0.1, 0.5), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
@@ -250,8 +250,8 @@ def main(args):
 
     # Validation transforms
     val_transform = transforms.Compose([
-        # transforms.Resize(375, interpolation=transforms.InterpolationMode.BICUBIC, max_size=750),
-        # transforms.CenterCrop(input_size),
+        transforms.Resize(840, interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.CenterCrop(input_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
     ])
