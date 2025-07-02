@@ -324,6 +324,7 @@ def main(args):
     model_name = model_config.get('name', 'convnextv2_pico')
     model_params = {k: v for k, v in model_config.items() if k != "name"}
     model_params['loss_config'] = config.get('loss', {'name': 'mse'})
+    model_params['img_size'] = config.get('data', {}).get('input_size', 112)
 
     try:
         if model_name.startswith('cnnmae'):
