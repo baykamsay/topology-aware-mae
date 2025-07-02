@@ -31,7 +31,7 @@ training:
   warmup_epochs: 40
   # Training loop
   epochs: 800 # Adjust as needed
-  batch_size: 256 # Adjust based on GPU memory
+  batch_size: 1024 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -41,11 +41,11 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_mse_112_fast" # Optional custom run name
-  wandb_run_id: "convnext_mse_112_fast" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_112_fast" # Checkpoint dir
+  wandb_run_name: "convnext_mse_112_long" # Optional custom run name
+  wandb_run_id: "convnext_mse_112_long" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_112_long" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
-  vis_interval: 1 # visualization interval
+  vis_interval: 10 # visualization interval
   checkpointing: true

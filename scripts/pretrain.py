@@ -60,6 +60,7 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
     Returns:
         float: Average validation loss.
     """
+    torch.manual_seed(42)  # Set seed for reproducible masks
     model.eval()  # Set model to evaluation mode
     total_val_loss = 0.0
     num_val_batches = 0
