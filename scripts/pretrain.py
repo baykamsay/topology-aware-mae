@@ -23,7 +23,7 @@ sys.path.insert(0, project_root)
 
 from utils.config import load_config
 from utils.visualizations import log_mae_visualizations
-from models.convnextv2 import fcmae_dense
+from models.convnextv2 import fcmae
 from models.cnn_mae import cnn_mae
 
 # Set up logging
@@ -332,8 +332,8 @@ def main(args):
     try:
         if model_name.startswith('cnnmae'):
             model = cnn_mae.__dict__[model_name](**model_params)
-        elif model_name.startswith('dense'):
-            model = fcmae_dense.__dict__[model_name](**model_params)
+        elif model_name.startswith('convnextv2'):
+            model = fcmae.__dict__[model_name](**model_params)
         else:
             logger.error(f"Model {model_name} not supported.")
             sys.exit(1)

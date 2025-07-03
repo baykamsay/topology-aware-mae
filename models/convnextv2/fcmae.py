@@ -12,7 +12,7 @@ from .convnextv2 import Block
 
 from losses.pretrain import get_loss_function
 
-class DenseFCMAE(nn.Module):
+class FCMAE(nn.Module):
     """ Fully Convolutional Masked Autoencoder (FCMAE) with DenseConvNeXtV2 backbone."""
     def __init__(
                 self,
@@ -186,52 +186,52 @@ class DenseFCMAE(nn.Module):
         return loss, pred, mask, individual_losses
     
     
-def dense_convnextv2_atto(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_atto(**kwargs):
+    model = FCMAE(
         depths=[2, 2, 6, 2], dims=[40, 80, 160, 320], **kwargs)
     return model
 
-def dense_convnextv2_femto(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_femto(**kwargs):
+    model = FCMAE(
         depths=[2, 2, 6, 2], dims=[48, 96, 192, 384], **kwargs)
     return model
 
-def dense_convnextv2_pico(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_pico(**kwargs):
+    model = FCMAE(
         depths=[2, 2, 6, 2], dims=[64, 128, 256, 512], **kwargs)
     return model
 
-def dense_convnextv2_nano(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_nano(**kwargs):
+    model = FCMAE(
         depths=[2, 2, 8, 2], dims=[80, 160, 320, 640], **kwargs)
     return model
 
-def dense_convnextv2_tiny(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_tiny(**kwargs):
+    model = FCMAE(
         depths=[3, 3, 9, 3], dims=[96, 192, 384, 768], **kwargs)
     return model
 
-def dense_convnextv2_base(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_base(**kwargs):
+    model = FCMAE(
         depths=[3, 3, 27, 3], dims=[128, 256, 512, 1024], **kwargs)
     return model
 
-def dense_convnextv2_large(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_large(**kwargs):
+    model = FCMAE(
         depths=[3, 3, 27, 3], dims=[192, 384, 768, 1536], **kwargs)
     return model
 
-def dense_convnextv2_huge(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_huge(**kwargs):
+    model = FCMAE(
         depths=[3, 3, 27, 3], dims=[352, 704, 1408, 2816], **kwargs)
     return model
 
-def dense_convnextv2_test(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_test(**kwargs):
+    model = FCMAE(
         depths=[2, 6, 2], dims=[128, 256, 512], **kwargs)
     return model
 
-def dense_convnextv2_8(**kwargs):
-    model = DenseFCMAE(
+def convnextv2_8(**kwargs):
+    model = FCMAE(
         depths=[2, 6], dims=[128, 256], **kwargs)
     return model
