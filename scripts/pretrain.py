@@ -232,7 +232,7 @@ def main(args):
     logger.info("Setting up dataset and DataLoader...")
 
     # Define Transforms
-    input_size = config.get('data', {}).get('input_size', 128)
+    input_size = config.get('data', {}).get('input_size', 112)
     # ImageNet default mean and std
     # img_mean = [0.485, 0.456, 0.406]
     # img_std = [0.229, 0.224, 0.225]

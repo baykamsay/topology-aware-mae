@@ -48,7 +48,7 @@ if __name__ == '__main__':
             'patch_size': 16,
         },
         'data': {
-            'input_size': 128,
+            'input_size': 112,
             'path': '/path/to/data',
         },
         'training': {

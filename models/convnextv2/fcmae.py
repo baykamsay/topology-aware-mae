@@ -16,7 +16,7 @@ class FCMAE(nn.Module):
     """ Fully Convolutional Masked Autoencoder (FCMAE) with DenseConvNeXtV2 backbone."""
     def __init__(
                 self,
-                img_size=128,
+                img_size=112,
                 in_chans=3,
                 depths=[3, 3, 9, 3],
                 dims=[96, 192, 384, 768],

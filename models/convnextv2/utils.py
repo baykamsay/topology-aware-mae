@@ -17,13 +17,12 @@ class DenseGRN(nn.Module):
         self.eps = eps
 
     def forward(self, x, mask=None):
-        # Assumes input format is (N, H, W, C) - channels_last
+        # Assumes input format is (N, H, W, C) - channels_last and mask is (N, C, H, W)
         inputs = x # Store original input for residual connection & final scaling
 
         if mask is not None:
-            # Apply mask to the input features before normalization calculation
-            # Mask shape should be broadcastable, e.g., (N, H, W, 1)
-            x = x * (1. - mask)
+            mask_hwc = mask.permute(0, 2, 3, 1)
+            x = x * (1. - mask_hwc)
 
         # Calculate norm over spatial dimensions (H, W)
         Gx = torch.norm(x, p=2, dim=(1, 2), keepdim=True)

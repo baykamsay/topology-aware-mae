@@ -31,7 +31,7 @@ training:
   warmup_epochs: 1
   # Training loop
   epochs: 10 # Adjust as needed
-  batch_size: 56 # Adjust based on GPU memory
+  batch_size: 48 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -41,7 +41,7 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_test_val_rep" # Optional custom run name
+  wandb_run_name: "convnext_fix" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
   output_dir: "./output/pretrain/convnext_test" # Checkpoint dir
   val_interval: 1 # validation interval

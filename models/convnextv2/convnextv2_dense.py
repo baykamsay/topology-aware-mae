@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from timm.layers import trunc_normal_, DropPath
-from .utils import LayerNorm, DenseGRN # Use DenseGRN
+from .utils import LayerNorm, DenseGRN
 
 class Block(nn.Module):
     """ Dense ConvNeXtV2 Block simulating sparse convolutions with masking.
@@ -42,39 +42,22 @@ class Block(nn.Module):
         input = x
 
         # --- Simulate sparse convolution ---
-        # 1. Apply mask before conv (zero out masked features)
         if mask is not None:
-            # Ensure mask is in NCHW format if needed, or broadcastable
-            if mask.shape[1] != x.shape[1] and mask.shape[1] == 1: # (N, 1, H, W) -> (N, C, H, W)
-                mask_nchw = mask.repeat(1, x.shape[1], 1, 1)
-            else:
-                mask_nchw = mask # Assume it's already (N, C, H, W) or similar
-            x = x * (1. - mask_nchw)
+            x = x * (1. - mask)
 
         x = self.dwconv(x)
 
-        # 2. Apply mask after conv (zero out features *at* masked locations)
         if mask is not None:
-            x = x * (1. - mask_nchw)
+            x = x * (1. - mask)
         # --- End Simulation ---
 
         # Permute for LayerNorm and Linear layers
         x = x.permute(0, 2, 3, 1) # (N, C, H, W) -> (N, H, W, C)
 
-        # Prepare mask for channel-last format if needed for GRN
-        mask_nhwc = None
-        if mask is not None:
-             # Ensure mask is broadcastable for channels_last: (N, H, W, 1)
-             if mask.shape[1] == 1: # N1HW format original
-                 mask_nhwc = mask.permute(0, 2, 3, 1) # N1HW -> NHW1
-             elif mask.dim() == 4 and mask.shape[-1] == 1: # Already NHW1
-                 mask_nhwc = mask
-             # Add more sophisticated checks/reshaping if needed based on how mask is passed
-
         x = self.norm(x)
         x = self.pwconv1(x)
         x = self.act(x)
-        x = self.grn(x, mask=mask_nhwc) # Pass mask to DenseGRN
+        x = self.grn(x, mask=mask) # Pass mask to DenseGRN
         x = self.pwconv2(x)
 
         # Permute back to channels_first
@@ -83,7 +66,29 @@ class Block(nn.Module):
         # Apply DropPath to the residual connection
         x = input + self.drop_path(x)
         return x
+    
+class MaskedDownsample(nn.Module):
+    """ Downsampling with a convolutional layer that supports masking to simulate sparse convolutions.
+    """
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+        self.norm = LayerNorm(in_channels, eps=1e-6, data_format="channels_first")
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=2, stride=2)
 
+    def forward(self, x, mask=None):
+        x = self.norm(x)
+
+        if mask is not None:
+            x = x * (1. - mask)
+        x = self.conv(x)
+
+        # If mask is provided, downsample it as well
+        if mask is not None:
+            mask = F.max_pool2d(mask, kernel_size=2, stride=2)
+            x = x * (1. - mask)
+
+        # Return the mask too for the next layers
+        return x, mask
 
 class DenseConvNeXtV2(nn.Module):
     """ Dense ConvNeXtV2 simulating the sparse version for FCMAE encoder.
@@ -105,7 +110,7 @@ class DenseConvNeXtV2(nn.Module):
         self.dims = dims
         self.num_stages = len(depths)
 
-        # Stem and downsampling layers (using standard dense layers)
+        # Stem and downsampling layers
         self.downsample_layers = nn.ModuleList()
         # Stem: Conv2d (patchify) + LayerNorm (channels_first)
         stem = nn.Sequential(
@@ -115,9 +120,9 @@ class DenseConvNeXtV2(nn.Module):
         self.downsample_layers.append(stem)
         # Intermediate downsampling layers: LayerNorm (channels_first) + Conv2d (stride=2)
         for i in range(self.num_stages - 1):
-            downsample_layer = nn.Sequential(
-                    LayerNorm(dims[i], eps=1e-6, data_format="channels_first"),
-                    nn.Conv2d(dims[i], dims[i+1], kernel_size=2, stride=2),
+            downsample_layer = MaskedDownsample(
+                in_channels=dims[i],
+                out_channels=dims[i + 1]
             )
             self.downsample_layers.append(downsample_layer)
 
@@ -179,11 +184,7 @@ class DenseConvNeXtV2(nn.Module):
         for i in range(self.num_stages):
             # Apply downsampling (except for the first stage)
             if i > 0:
-                x = self.downsample_layers[i](x)
-                # Downsample the mask if needed (e.g., max pooling or avg pooling)
-                # For stride=2 conv, mask spatial dim halves
-                mask = F.max_pool2d(mask, kernel_size=2, stride=2)
-                # Alternatively: F.avg_pool2d(mask, kernel_size=2, stride=2) might preserve ratios better
+                x, mask = self.downsample_layers[i](x, mask=mask) # Downsample and get new mask
 
             # Apply blocks within the stage, passing the mask
             for block in self.stages[i]:
