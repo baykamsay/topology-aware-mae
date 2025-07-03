@@ -1,6 +1,6 @@
 # Model Configuration
 model:
-  name: convnextv2_pico
+  name: dense_convnextv2_pico
   patch_size: 16
   decoder_depth: 1
   decoder_embed_dim: 512
@@ -39,7 +39,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "convnext_test_val_rep" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
