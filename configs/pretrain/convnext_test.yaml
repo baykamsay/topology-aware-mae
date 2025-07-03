@@ -14,6 +14,8 @@ loss:
 # Data Configuration
 data:
   input_size: 112
+  min_scale: 0.1 # Minimum scale for RandomResizedCrop
+  max_scale: 0.5 # Maximum scale for RandomResizedCrop
   data_path: "./data/pretrain/massgis/train"
   eval_data_path: "./data/pretrain/massgis/val"
   num_workers: 16
@@ -39,7 +41,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "convnext_fix" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id

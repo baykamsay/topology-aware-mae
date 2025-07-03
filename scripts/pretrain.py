@@ -233,6 +233,8 @@ def main(args):
 
     # Define Transforms
     input_size = config.get('data', {}).get('input_size', 112)
+    min_scale = config.get('data', {}).get('min_scale', 0.1)
+    max_scale = config.get('data', {}).get('max_scale', 0.5)
     # ImageNet default mean and std
     # img_mean = [0.485, 0.456, 0.406]
     # img_std = [0.229, 0.224, 0.225]
@@ -241,7 +243,7 @@ def main(args):
 
     # Basic pre-training transforms
     train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(input_size, scale=(0.1, 0.5), interpolation=transforms.InterpolationMode.BICUBIC),
+        transforms.RandomResizedCrop(input_size, scale=(min_scale, max_scale), interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.RandomHorizontalFlip(),
         transforms.RandomVerticalFlip(),
         # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
@@ -301,6 +303,7 @@ def main(args):
         drop_last=True,
         worker_init_fn=seed_worker,
         generator=g,
+        persistent_workers=True
     )
     logger.info(f"Training DataLoader created with batch size {batch_size} and {num_workers} workers.")
 
@@ -315,6 +318,7 @@ def main(args):
             drop_last=False,
             worker_init_fn=seed_worker,
             generator=g,
+            persistent_workers=True
         )
         logger.info(f"Validation DataLoader created with batch size {batch_size} and {num_workers} workers.")
     else:
