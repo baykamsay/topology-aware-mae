@@ -30,9 +30,9 @@ training:
   # Learning Rate Schedule
   learning_rate: 1.e-3 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 1
+  warmup_epochs: 5
   # Training loop
-  epochs: 10 # Adjust as needed
+  epochs: 30 # Adjust as needed
   batch_size: 48 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
@@ -41,13 +41,13 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: false
+  enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_fix" # Optional custom run name
+  wandb_run_name: "convnext_fix_test" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
-  output_dir: "./output/pretrain/convnext_test" # Checkpoint dir
+  output_dir: "./output/pretrain/convnext_fix_test" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 1 # visualization interval
-  checkpointing: false
+  checkpointing: true

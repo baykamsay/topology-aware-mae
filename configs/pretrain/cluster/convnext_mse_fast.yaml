@@ -28,7 +28,7 @@ training:
   beta1: 0.9
   beta2: 0.95
   # Learning Rate Schedule
-  learning_rate: 5e-4 # Base LR
+  learning_rate: 5.e-4 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 40
   # Training loop
