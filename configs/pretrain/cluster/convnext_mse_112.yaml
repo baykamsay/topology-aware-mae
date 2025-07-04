@@ -14,8 +14,8 @@ loss:
 # Data Configuration
 data:
   input_size: 112
-  min_scale: 0.1 # Minimum scale for RandomResizedCrop
-  max_scale: 0.5 # Maximum scale for RandomResizedCrop
+  min_scale: 0.2 # Minimum scale for RandomResizedCrop
+  max_scale: 1. # Maximum scale for RandomResizedCrop
   data_path: "/tmp/massgis/train"
   eval_data_path: "/tmp/massgis/val"
   num_workers: 16
@@ -43,10 +43,10 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_mse_base" # Optional custom run name
-  wandb_run_id: "convnext_mse_base" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_base" # Checkpoint dir
-  val_interval: 1 # validation interval
+  wandb_run_name: "convnext_mse_sliced_112" # Optional custom run name
+  wandb_run_id: "convnext_mse_sliced_112" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_sliced_112" # Checkpoint dir
+  val_interval: 10 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 10 # visualization interval

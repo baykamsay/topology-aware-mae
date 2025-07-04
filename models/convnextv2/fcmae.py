@@ -46,7 +46,7 @@ class FCMAE(nn.Module):
             raise ValueError(f"Loss function {loss_config['name']} not found.")
         
         # encoder
-        stem_size = 2 if img_size == 112 else 4
+        stem_size = 4 if img_size == 224 else 2
         self.encoder = DenseConvNeXtV2(
             in_chans=in_chans, depths=depths, dims=dims, stem_size=stem_size)
         # decoder

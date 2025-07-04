@@ -252,10 +252,10 @@ def main(args):
     ])
 
 
-    whole_size = 420 if input_size == 112 else 840
+    # whole_size = 420 if input_size == 112 else 840
     # Validation transforms
     val_transform = transforms.Compose([
-        transforms.Resize(whole_size, interpolation=transforms.InterpolationMode.BICUBIC),
+        # transforms.Resize(whole_size, interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.CenterCrop(input_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
