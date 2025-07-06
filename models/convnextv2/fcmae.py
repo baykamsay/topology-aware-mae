@@ -25,7 +25,8 @@ class FCMAE(nn.Module):
                 patch_size=16,
                 mask_ratio=0.6,
                 # norm_pix_loss=False,
-                loss_config={'name': 'mse'}):
+                loss_config={'name': 'mse'},
+                device=None):
         super().__init__()
 
         # configs
@@ -39,6 +40,10 @@ class FCMAE(nn.Module):
         self.decoder_depth = decoder_depth
         # self.norm_pix_loss = norm_pix_loss
         # self.loss_config = loss_config
+
+        # validation generator
+        self.val_gen = torch.Generator(device=device)
+        self.val_gen.manual_seed(27)  # Set seed for reproducible masks
 
         # loss
         self.loss_func = get_loss_function(loss_config, self)
@@ -83,6 +88,10 @@ class FCMAE(nn.Module):
         if hasattr(self, 'mask_token'):    
             torch.nn.init.normal_(self.mask_token, std=.02)
     
+    def eval(self):
+        super().eval()
+        self.reset_val_seed(27)
+    
     def patchify(self, imgs):
         """
         imgs: (N, 3, H, W)
@@ -111,12 +120,23 @@ class FCMAE(nn.Module):
         imgs = x.reshape(shape=(x.shape[0], 3, h * p, h * p))
         return imgs
     
+    def reset_val_seed(self, seed=27):
+        """
+        Reset the validation generator seed.
+        This is for reproducibility during validation.
+        """
+        self.val_gen.manual_seed(seed)
+    
     def gen_random_mask(self, x, mask_ratio):
         N = x.shape[0]
         L = (x.shape[2] // self.patch_size) ** 2
         len_keep = int(L * (1 - mask_ratio))
 
-        noise = torch.randn(N, L, device=x.device)
+        if self.training:
+            noise = torch.randn(N, L, device=x.device)
+        else:
+            # use the validation generator for reproducibility
+            noise = torch.randn(N, L, device=x.device, generator=self.val_gen)
 
         # sort noise for each sample
         ids_shuffle = torch.argsort(noise, dim=1)

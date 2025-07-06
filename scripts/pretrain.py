@@ -60,7 +60,6 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
     Returns:
         float: Average validation loss.
     """
-    torch.manual_seed(42)  # Set seed for reproducible masks
     model.eval()  # Set model to evaluation mode
     total_val_loss = 0.0
     num_val_batches = 0
@@ -332,6 +331,7 @@ def main(args):
     model_params = {k: v for k, v in model_config.items() if k != "name"}
     model_params['loss_config'] = config.get('loss', {'name': 'mse'})
     model_params['img_size'] = config.get('data', {}).get('input_size', 112)
+    model_params['device'] = device
 
     try:
         if model_name.startswith('cnnmae'):

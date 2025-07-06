@@ -1,6 +1,6 @@
 # Model Configuration
 model:
-  name: convnextv2_pico
+  name: convnextv2_tiny
   patch_size: 16
   decoder_depth: 1
   decoder_embed_dim: 512
@@ -14,10 +14,10 @@ loss:
 # Data Configuration
 data:
   input_size: 112
-  min_scale: 0.2 # Minimum scale for RandomResizedCrop
-  max_scale: 1. # Maximum scale for RandomResizedCrop
-  data_path: "/tmp/massgis/train"
-  eval_data_path: "/tmp/massgis/val"
+  min_scale: 0.02 # Minimum scale for RandomResizedCrop
+  max_scale: 0.1 # Maximum scale for RandomResizedCrop
+  data_path: "/vol/miltank/users/sayb/datasets/massgis_375/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_375/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
@@ -43,10 +43,10 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_mse_sliced_112" # Optional custom run name
-  wandb_run_id: "convnext_mse_sliced_112" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_sliced_112" # Checkpoint dir
-  val_interval: 10 # validation interval
+  wandb_run_name: "convnext_mse_mask_fix" # Optional custom run name
+  wandb_run_id: "convnext_mse_mask_fix" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_mask_fix" # Checkpoint dir
+  val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 10 # visualization interval
