@@ -1,6 +1,6 @@
 # Model Configuration
 model:
-  name: convnextv2_pico
+  name: convnextv2_tiny
   patch_size: 16
   decoder_depth: 1
   decoder_embed_dim: 512
@@ -24,8 +24,8 @@ data:
   input_size: 112
   min_scale: 0.02 # Minimum scale for RandomResizedCrop
   max_scale: 0.1 # Maximum scale for RandomResizedCrop
-  data_path: "./data/pretrain/massgis_375/train"
-  eval_data_path: "./data/pretrain/massgis_375/val"
+  data_path: "/vol/miltank/users/sayb/datasets/massgis_375/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_375/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
@@ -36,12 +36,12 @@ training:
   beta1: 0.9
   beta2: 0.95
   # Learning Rate Schedule
-  learning_rate: 1.e-3 # Base LR
+  learning_rate: 1.5e-4 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 1
+  warmup_epochs: 40
   # Training loop
-  epochs: 10 # Adjust as needed
-  batch_size: 48 # Adjust based on GPU memory
+  epochs: 800 # Adjust as needed
+  batch_size: 256 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -51,11 +51,11 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_bm_test" # Optional custom run name
-  # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
-  output_dir: "./output/pretrain/convnext_test" # Checkpoint dir
+  wandb_run_name: "convnext_bm_112" # Optional custom run name
+  wandb_run_id: "convnext_bm_112" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_bm_112" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
-  vis_interval: 1 # visualization interval
-  checkpointing: false
+  vis_interval: 10 # visualization interval
+  checkpointing: true
