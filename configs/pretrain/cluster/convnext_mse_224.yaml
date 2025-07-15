@@ -30,8 +30,9 @@ training:
   weight_decay: 0.05
   beta1: 0.9
   beta2: 0.95
+  frozen_encoder_epochs: 10
   # Learning Rate Schedule
-  learning_rate: 1.5e-4 # Base LR
+  learning_rate: 1.e-4 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 20
   # Training loop
@@ -46,9 +47,9 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "convnext_mse_pretrained_base" # Optional custom run name
-  wandb_run_id: "convnext_mse_pretrained_base" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_pretrained_base" # Checkpoint dir
+  wandb_run_name: "convnext_mse_pretrained_base_2" # Optional custom run name
+  wandb_run_id: "convnext_mse_pretrained_base_2" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/convnext_mse_pretrained_base_2" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations

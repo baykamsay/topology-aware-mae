@@ -33,7 +33,7 @@ class FCMAE(nn.Module):
         # configs
         self.img_size = img_size
         self.depths = depths
-        self.imds = dims
+        self.dims = dims
         self.patch_size = patch_size
         self.mask_ratio = mask_ratio
         self.num_patches = (img_size // patch_size) ** 2

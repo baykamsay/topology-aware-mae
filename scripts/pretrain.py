@@ -114,6 +114,46 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
 
     return avg_val_loss, avg_individual_losses
 
+def unfreeze_encoder(model, optimizer, lr, weight_decay, beta1, beta2):
+    """
+    Unfreeze encoder parameters and add them to the optimizer.
+    
+    Args:
+        model: The segmentation model
+        optimizer: Current optimizer (will add new param group)
+        lr: Learning rate for the encoder parameters
+        weight_decay: Weight decay for the encoder
+        beta1, beta2: Beta parameters for AdamW
+    
+    Returns:
+        bool: True if unfreezing was successful
+    """
+    if not hasattr(model, 'encoder'):
+        logger.error("Model does not have an encoder attribute. Cannot unfreeze.")
+        return False
+    
+    # Unfreeze encoder parameters
+    encoder_params = []
+    for param in model.encoder.parameters():
+        if not param.requires_grad:
+            param.requires_grad = True
+            encoder_params.append(param)
+    
+    if not encoder_params:
+        logger.warning("No frozen encoder parameters found to unfreeze.")
+        return False
+    
+    # Add encoder parameters to optimizer as a new param group
+    optimizer.add_param_group({
+        'params': encoder_params,
+        'lr': lr,
+        'weight_decay': weight_decay,
+        'betas': (beta1, beta2) if hasattr(optimizer, 'param_groups') and 'betas' in optimizer.param_groups[0] else None
+    })
+    
+    logger.info(f"Successfully unfroze {len(encoder_params)} encoder parameters and added them to optimizer with LR: {lr}")
+    return True
+
 def get_param_groups(model, weight_decay):
     """
     Assigns different weight decay to different parameter groups.
@@ -403,6 +443,38 @@ def main(args):
     beta1 = training_config.get('beta1', 0.9)
     beta2 = training_config.get('beta2', 0.95)
 
+    # Freeze encoder parameters
+    if hasattr(model, 'encoder'):
+        for param in model.encoder.parameters():
+            param.requires_grad = False
+        logger.info("Froze encoder parameters.")
+
+        encoder_frozen = True
+        
+        # Parameters to optimize are only from the decoder
+        if hasattr(model, 'decoder'):
+            parameters_to_optimize = model.decoder.parameters()
+            logger.info("Optimizing only decoder parameters.")
+            if hasattr(model, 'proj'):
+                parameters_to_optimize.extend(list(model.proj.parameters()))
+            if hasattr(model, 'mask_token'):
+                parameters_to_optimize.append(model.mask_token)
+        elif hasattr(model, 'decoder_stages'):
+            parameters_to_optimize = []
+            # If model has decoder_stages, optimize those
+            parameters_to_optimize.extend(list(model.decoder_stages.parameters()))
+            logger.info("Optimizing decoder stages parameters.")
+            # If model has a final conv layer, optimize that too
+            if hasattr(model, 'final_conv'):
+                parameters_to_optimize.extend(list(model.final_conv.parameters()))
+        else:
+            logger.warning("Model does not have a 'decoder' attribute. Optimizing all parameters.")
+            parameters_to_optimize = filter(lambda p: p.requires_grad, model.parameters())
+    else:
+        logger.warning("Model does not have an 'encoder' attribute. Optimizing all parameters.")
+        parameters_to_optimize = model.parameters()
+        encoder_frozen = False
+
     if weight_decay > 0:
         param_groups = get_param_groups(model, weight_decay)
         logger.info(f"Applied custom weight decay: {weight_decay} for decay group, 0 for no_decay group.")
@@ -487,6 +559,7 @@ def main(args):
             lr_scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
             start_epoch = checkpoint['epoch']
             global_step = checkpoint.get('global_step', start_epoch * num_training_steps_per_epoch) # Restore global_step
+            encoder_frozen = checkpoint.get('encoder_frozen', True)
             
             if 'best_val_loss' in checkpoint:
                 best_val_loss = checkpoint['best_val_loss']
@@ -508,6 +581,16 @@ def main(args):
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
     for epoch in range(start_epoch, total_epochs):
+        # Check to unfreeze encoder if needed
+        if encoder_frozen and epoch >= training_config.get('frozen_encoder_epochs', 0):
+            logger.info(f"Unfreezing encoder parameters at epoch {epoch+1}.")
+            
+            encoder_lr = optimizer.param_groups[0]['lr'] # Get current decoder LR
+            success = unfreeze_encoder(model, optimizer, encoder_lr, weight_decay, beta1, beta2)
+            if success:
+                encoder_frozen = False
+                # Update scheduler if needed
+        
         model.train()
         running_loss = 0.0
         optimizer.zero_grad() # Initialize gradients to zero at the start of each epoch / before accumulation window
@@ -609,6 +692,7 @@ def main(args):
                     'optimizer_state_dict': optimizer.state_dict(),
                     'scheduler_state_dict': lr_scheduler.state_dict(),
                     'best_val_loss': best_val_loss,
+                    'encoder_frozen': encoder_frozen, # Save encoder frozen state
                     'config': config # Save config for reference, optional
                 }
                 if use_mixed_precision and grad_scaler:
