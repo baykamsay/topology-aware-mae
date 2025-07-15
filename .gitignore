@@ -191,6 +191,7 @@ Thumbs.db
 /logs/
 /checkpoints/
 /data/
+/pretrained_models/
 *.pth
 *.pt
 *.ckpt

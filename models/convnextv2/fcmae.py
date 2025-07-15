@@ -26,7 +26,8 @@ class FCMAE(nn.Module):
                 mask_ratio=0.6,
                 # norm_pix_loss=False,
                 loss_config={'name': 'mse'},
-                device=None):
+                device=None,
+                pretrained_path=None):
         super().__init__()
 
         # configs
@@ -72,6 +73,9 @@ class FCMAE(nn.Module):
             kernel_size=1)
 
         self.apply(self._init_weights)
+
+        if pretrained_path:
+            self.load_pretrained_encoder(pretrained_path)
     
     def _init_weights(self, m):
         if isinstance(m, nn.Conv2d):
@@ -88,6 +92,25 @@ class FCMAE(nn.Module):
         if hasattr(self, 'mask_token'):    
             torch.nn.init.normal_(self.mask_token, std=.02)
     
+    def load_pretrained_encoder(self, pretrained_path):
+        """
+        Load pretrained encoder weights from a given path.
+        """
+        try:
+            checkpoint = torch.load(pretrained_path, map_location='cpu')
+            state_dict = checkpoint.get('model', checkpoint)
+
+            # Reshape GRN parameters if they have the old 2D shape
+            for k, v in state_dict.items():
+                if 'grn.gamma' in k or 'grn.beta' in k:
+                    if len(v.shape) == 2:
+                        state_dict[k] = v.reshape(1, 1, 1, -1)
+            
+            self.encoder.load_state_dict(state_dict, strict=False)
+            print(f"Loaded pretrained encoder from {pretrained_path}")
+        except Exception as e:
+            print(f"Error loading pretrained encoder: {e}")
+
     def eval(self):
         super().eval()
         self.reset_val_seed(27)
