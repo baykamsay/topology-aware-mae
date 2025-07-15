@@ -21,7 +21,7 @@ from timm.scheduler.cosine_lr import CosineLRScheduler
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
-from utils.config import load_config
+from utils.config import load_config, deep_update
 from utils.visualizations import log_mae_visualizations
 from models.convnextv2 import fcmae
 from models.cnn_mae import cnn_mae
@@ -40,6 +40,13 @@ def get_args_parser():
         type=str,
         default=os.path.join(project_root, "configs", "pretrain", "base_pretrain.yaml"),
         help="Path to the configuration YAML file",
+    )
+
+    # Optional arguments
+    parser.add_argument(
+        "--sweep",
+        action="store_true",
+        help="Whether to run a hyperparameter sweep",
     )
 
     return parser
@@ -198,17 +205,31 @@ def main(args):
     wandb_logger = None
     if log_config.get('enable_wandb', False):
         try:
-            wandb_logger = wandb.init(
-                project=log_config.get('wandb_project', 'topo-conv-mae-pretrain'),
-                name=log_config.get('wandb_run_name', None), # Optional run name
-                config=config, # Log the entire config
-                # dir=output_dir, # Optional: Save wandb files in the run's output directory
-                resume='allow', # Allow resuming previous runs if id is reused (useful with checkpointing)
-                id=log_config.get('wandb_run_id', None) # Optionally set an ID for explicit resuming, can be generated or from checkpoint
-            )
-            logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
-            # Optionally watch the model (can increase overhead)
-            # wandb.watch(model, log='gradients', log_freq=1000) 
+            # if running as a part of a sweep
+            if args.sweep:
+                wandb_logger = wandb.init()  # Initialize W&B without a project name for sweeps
+
+                logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
+
+                # Get sweep config and merge with main config
+                sweep_config = dict(wandb.config)  # Get the sweep config
+                config = deep_update(config, sweep_config)  # Merge sweep config into main config
+
+                training_config = config.get('training', {})
+                log_config = config.get('logging', {})
+            else:
+                # Initialize W&B with project name and other configurations
+                wandb_logger = wandb.init(
+                    project=log_config.get('wandb_project', 'topo-conv-mae-pretrain'),
+                    name=log_config.get('wandb_run_name', None), # Optional run name
+                    config=config, # Log the entire config
+                    # dir=output_dir, # Optional: Save wandb files in the run's output directory
+                    resume='allow', # Allow resuming previous runs if id is reused (useful with checkpointing)
+                    id=log_config.get('wandb_run_id', None) # Optionally set an ID for explicit resuming, can be generated or from checkpoint
+                )
+                logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
+                # Optionally watch the model (can increase overhead)
+                # wandb.watch(model, log='gradients', log_freq=1000) 
         except Exception as e:
             logger.error(f"Failed to initialize W&B: {e}. Disabling W&B logging.")
             wandb_logger = None # Ensure it's None if init fails
@@ -232,24 +253,47 @@ def main(args):
 
     # Define Transforms
     input_size = config.get('data', {}).get('input_size', 112)
-    min_scale = config.get('data', {}).get('min_scale', 0.1)
-    max_scale = config.get('data', {}).get('max_scale', 0.5)
+    augmentation_config = config.get('data', {}).get('augmentation', {})
+    # min_scale = config.get('data', {}).get('min_scale', 0.1)
+    # max_scale = config.get('data', {}).get('max_scale', 0.5)
     # ImageNet default mean and std
     # img_mean = [0.485, 0.456, 0.406]
     # img_std = [0.229, 0.224, 0.225]
     img_mean = [0.33627802, 0.33987136, 0.29782979]
     img_std = [0.19191039, 0.18239774, 0.18225507]
 
-    # Basic pre-training transforms
-    train_transform = transforms.Compose([
-        transforms.RandomResizedCrop(input_size, scale=(min_scale, max_scale), interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.RandomHorizontalFlip(),
-        transforms.RandomVerticalFlip(),
-        # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=img_mean, std=img_std),
-    ])
-
+    if augmentation_config.get('name') == 'RandomResizedCrop':
+        train_transform = transforms.Compose([
+            transforms.RandomResizedCrop(input_size,
+                                         scale=augmentation_config.get('scale', [0.02, 0.1]),
+                                         ratio=augmentation_config.get('ratio', [0.75, 1.3333]),
+                                         interpolation=transforms.InterpolationMode.BICUBIC),
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomVerticalFlip(),
+            # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=img_mean, std=img_std),
+        ])
+    elif augmentation_config.get('name') == 'RandomCrop':
+        # Basic pre-training transforms
+        train_transform = transforms.Compose([
+            transforms.RandomCrop(input_size),
+            # transforms.RandomHorizontalFlip(),
+            # transforms.RandomVerticalFlip(),
+            # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=img_mean, std=img_std),
+        ])
+    elif augmentation_config.get('name') == 'CenterCrop':
+        # CenterCrop for testing purposes
+        train_transform = transforms.Compose([
+            transforms.CenterCrop(input_size),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=img_mean, std=img_std),
+        ])
+    else:
+        logger.error(f"Unsupported augmentation type: {augmentation_config.get('name')}. Supported types: RandomResizedCrop, RandomCrop.")
+        sys.exit(1)
 
     # whole_size = 420 if input_size == 112 else 840
     # Validation transforms
@@ -618,6 +662,6 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser('Topo MAE Pre-training', parents=[get_args_parser()])
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     main(args)

@@ -5,6 +5,7 @@ Configuration utilities for loading YAML configs.
 import os
 import yaml
 import logging
+from collections.abc import Mapping
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -35,6 +36,18 @@ def load_config(config_path):
     except Exception as e:
         logger.error(f"An unexpected error occurred while loading the config: {e}")
         return None
+    
+def deep_update(source, overrides):
+    """
+    Update a nested dictionary or similar mapping.
+    Modifies `source` in place.
+    """
+    for key, value in overrides.items():
+        if isinstance(value, Mapping) and key in source and isinstance(source.get(key, {}), Mapping):
+            source[key] = deep_update(source.get(key, {}), value)
+        else:
+            source[key] = value
+    return source
 
 if __name__ == '__main__':
     # Example usage

@@ -1,0 +1,33 @@
+# This file defines the wandb sweep.
+# It specifies the script to run, the search strategy, the metric to optimize,
+# and the hyperparameters to search over.
+
+# The 'command' section tells the wandb agent exactly how to run the script.
+# - ${env} and python are placeholders for the environment and python interpreter.
+# - We explicitly pass the base config file and the --sweep flag.
+# - ${args} is a placeholder that wandb uses for its own arguments.
+command:
+  # - ${env}
+  - python
+  - scripts/pretrain.py
+  - --config
+  - configs/pretrain/convnext_test.yaml # <- base config here
+  - --sweep
+  - ${args}
+
+# The search strategy. 'bayes' is usually a good choice.
+method: bayes
+
+# The metric to track and optimize.
+metric:
+  name: val/loss
+  goal: minimize
+
+# The hyperparameters to search over.
+parameters:
+  training:
+    parameters:
+      learning_rate:
+        distribution: uniform
+        min: 1.0e-5
+        max: 1.0e-3
