@@ -16,6 +16,7 @@ import random
 import numpy as np
 import wandb
 from timm.scheduler.cosine_lr import CosineLRScheduler
+import threading
 
 # Adjust the path to include the root directory
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -182,9 +183,11 @@ def get_param_groups(model, weight_decay):
         {'params': no_decay, 'weight_decay': 0.}
     ]
 
+_save_thread = None
+
 def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
     """
-    Saves a training checkpoint.
+    Saves a training checkpoint asynchronously in a background thread.
 
     Args:
         state (dict): Contains model, optimizer, scheduler states, epoch, best_val_loss.
@@ -192,19 +195,38 @@ def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
         output_dir (str): Directory where checkpoints will be saved.
         filename (str): Base name for the checkpoint file.
     """
-    filepath = os.path.join(output_dir, filename)
-    torch.save(state, filepath)
-    logger.info(f"Checkpoint saved to {filepath}")
+    global _save_thread
+    if _save_thread is not None:
+        _save_thread.join() # Wait for previous save to finish
 
-    if is_best:
-        best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
-        shutil.copyfile(filepath, best_filepath)
-        logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
+    # Move tensors to CPU to avoid race conditions with main training thread
+    state_cpu = {
+        'epoch': state['epoch'],
+        'global_step': state['global_step'],
+        'model_state_dict': {k: v.cpu() for k, v in state['model_state_dict'].items()},
+        'optimizer_state_dict': state['optimizer_state_dict'], # AdamW state is on CPU by default
+        'scheduler_state_dict': state['scheduler_state_dict'],
+        'best_val_loss': state['best_val_loss'],
+        'encoder_frozen': state['encoder_frozen'],
+        'config': state.get('config')
+    }
+    if 'grad_scaler_state_dict' in state:
+        state_cpu['grad_scaler_state_dict'] = state['grad_scaler_state_dict']
 
-    # # Always save a 'latest' checkpoint for easy resume
-    # latest_filepath = os.path.join(output_dir, "latest_checkpoint.pth")
-    # shutil.copyfile(filepath, latest_filepath) # Or save directly to latest_checkpoint.pth
-    # logger.info(f"Latest checkpoint saved to {latest_filepath}")
+    def _save_job():
+        filepath = os.path.join(output_dir, filename)
+        torch.save(state_cpu, filepath)
+        logger.info(f"Checkpoint saved to {filepath}")
+
+        if is_best:
+            best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
+            shutil.copyfile(filepath, best_filepath)
+            logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
+
+    _save_thread = threading.Thread(target=_save_job)
+    _save_thread.start()
+    logger.info("Started saving checkpoint in background.")
+
 
 def main(args):
     # Load the configuration
@@ -745,6 +767,13 @@ def main(args):
 
     # ---- End of Training Loop ----
     logger.info("Pretraining completed successfully.")
+    
+    # Ensure the final checkpoint is saved before exiting
+    global _save_thread
+    if _save_thread is not None:
+        _save_thread.join()
+        logger.info("Final checkpoint saving operation finished.")
+
     if wandb_logger:
         wandb_logger.finish() # Finish the W&B run
 
