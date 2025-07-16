@@ -328,7 +328,7 @@ def main(args):
     if augmentation_config.get('name') == 'RandomResizedCrop':
         train_transform = transforms.Compose([
             transforms.RandomResizedCrop(input_size,
-                                         scale=augmentation_config.get('scale', [0.02, 0.1]),
+                                         scale=augmentation_config.get('scale', [0.2, 1.]),
                                          ratio=augmentation_config.get('ratio', [0.75, 1.3333]),
                                          interpolation=transforms.InterpolationMode.BICUBIC),
             # transforms.RandomHorizontalFlip(),
@@ -359,10 +359,11 @@ def main(args):
         sys.exit(1)
 
     # whole_size = 420 if input_size == 112 else 840
+    crop_size = input_size * 2 if input_size < 63 else input_size
     # Validation transforms
     val_transform = transforms.Compose([
-        # transforms.Resize(whole_size, interpolation=transforms.InterpolationMode.BICUBIC),
-        transforms.CenterCrop(input_size),
+        transforms.CenterCrop(crop_size),
+        transforms.Resize(input_size, interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
     ])

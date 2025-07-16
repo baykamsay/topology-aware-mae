@@ -2,7 +2,7 @@
 model:
   name: mae_vit_base_patch16
   # pretrained_path: "./pretrained_models/convnextv2_pico_1k_224_fcmae.pt" # Path to pre-trained model weights
-  patch_size: 16
+  patch_size: 8
   mask_ratio: 0.75
 
 # Loss Configuration
@@ -20,13 +20,13 @@ loss:
   
 # Data Configuration
 data:
-  input_size: 224
+  input_size: 48
   augmentation:
     name: RandomResizedCrop 
-    scale: [0.08, 1.] # Scale range for RandomResizedCrop
+    scale: [0.2, 1.] # Scale range for RandomResizedCrop
     ratio: [0.75, 1.3333] # Aspect ratio range for RandomResizedCrop
-  data_path: "./data/pretrain/massgis_375_test/train"
-  eval_data_path: "./data/pretrain/massgis_375_test/val"
+  data_path: "./data/pretrain/massgis_split_test/train"
+  eval_data_path: "./data/pretrain/massgis_split_test/val"
   num_workers: 16
 
 # Pre-training Hyperparameters
@@ -43,7 +43,7 @@ training:
   warmup_epochs: 2
   # Training loop
   epochs: 20 # Adjust as needed
-  batch_size: 2 # Adjust based on GPU memory
+  batch_size: 256 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -51,13 +51,13 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: false
+  enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_test_2" # Optional custom run name
+  wandb_run_name: "vitmae_test_vis" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
-  output_dir: "./output/pretrain/vitmae_c_test" # Checkpoint dir
+  output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
-  vis_interval: 4 # visualization interval
-  checkpointing: true
+  vis_interval: 1 # visualization interval
+  checkpointing: false

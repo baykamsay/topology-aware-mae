@@ -56,6 +56,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         # --------------------------------------------------------------------------
         # Additions
+        self.mask_ratio = mask_ratio
         # Validation generator
         self.val_gen = torch.Generator(device=device)
         self.val_gen.manual_seed(27)  # Set seed for reproducible masks
@@ -376,7 +377,7 @@ class MaskedAutoencoderViT(nn.Module):
 
         return x
 
-    def forward(self, imgs: torch.Tensor, mask_ratio: float = 0.75, return_all_tokens: bool = False, return_intermediate: bool = False, epoch: int = -1) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor]]]:
+    def forward(self, imgs: torch.Tensor, mask_ratio: float = None, return_all_tokens: bool = False, return_intermediate: bool = False, epoch: int = -1) -> Union[Tuple[torch.Tensor, torch.Tensor, torch.Tensor], Tuple[torch.Tensor, torch.Tensor, torch.Tensor, List[torch.Tensor]]]:
         """
         Forward pass of the model.
         
@@ -392,6 +393,9 @@ class MaskedAutoencoderViT(nn.Module):
             If return_intermediate is True:
                 Tuple of (pred, mask, target, intermediate_features)
         """
+        if mask_ratio is None:
+            mask_ratio = self.mask_ratio
+
         if return_intermediate: # TODO fix
             latent, mask, ids_restore, intermediate_features = self.forward_encoder(
                 imgs, mask_ratio, return_intermediate=True
