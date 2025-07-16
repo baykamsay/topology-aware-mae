@@ -25,6 +25,7 @@ from utils.config import load_config, deep_update
 from utils.visualizations import log_mae_visualizations
 from models.convnextv2 import fcmae
 from models.cnn_mae import cnn_mae
+from models.vit_mae import vit_mae
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -422,6 +423,8 @@ def main(args):
             model = cnn_mae.__dict__[model_name](**model_params)
         elif model_name.startswith('convnextv2'):
             model = fcmae.__dict__[model_name](**model_params)
+        elif model_name.startswith('mae_vit'):
+            model = vit_mae.__dict__[model_name](**model_params)
         else:
             logger.error(f"Model {model_name} not supported.")
             sys.exit(1)
@@ -444,7 +447,7 @@ def main(args):
     beta2 = training_config.get('beta2', 0.95)
 
     # Freeze encoder parameters
-    if hasattr(model, 'encoder'):
+    if training_config.get('frozen_encoder_epochs', 0) > 0 and hasattr(model, 'encoder'):
         for param in model.encoder.parameters():
             param.requires_grad = False
         logger.info("Froze encoder parameters.")
@@ -453,12 +456,13 @@ def main(args):
         
         # Parameters to optimize are only from the decoder
         if hasattr(model, 'decoder'):
-            parameters_to_optimize = model.decoder.parameters()
+            parameters_to_optimize = []
+            parameters_to_optimize.extend(list(model.decoder.parameters()))
             logger.info("Optimizing only decoder parameters.")
             if hasattr(model, 'proj'):
                 parameters_to_optimize.extend(list(model.proj.parameters()))
             if hasattr(model, 'mask_token'):
-                parameters_to_optimize.append(model.mask_token)
+                parameters_to_optimize.extend(model.mask_token)
         elif hasattr(model, 'decoder_stages'):
             parameters_to_optimize = []
             # If model has decoder_stages, optimize those
@@ -471,7 +475,7 @@ def main(args):
             logger.warning("Model does not have a 'decoder' attribute. Optimizing all parameters.")
             parameters_to_optimize = filter(lambda p: p.requires_grad, model.parameters())
     else:
-        logger.warning("Model does not have an 'encoder' attribute. Optimizing all parameters.")
+        logger.info("Encoder parameters are not frozen. Optimizing all model parameters.")
         parameters_to_optimize = model.parameters()
         encoder_frozen = False
 
