@@ -218,10 +218,10 @@ def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
         torch.save(state_cpu, filepath)
         logger.info(f"Checkpoint saved to {filepath}")
 
-        if is_best:
-            best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
-            shutil.copyfile(filepath, best_filepath)
-            logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
+        # if is_best:
+        #     best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
+        #     shutil.copyfile(filepath, best_filepath)
+        #     logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
 
     _save_thread = threading.Thread(target=_save_job)
     _save_thread.start()
@@ -542,13 +542,14 @@ def main(args):
     warmup_steps = min(num_training_steps_per_epoch * warmup_epochs, total_training_steps)
 
     min_lr = training_config.get('min_lr', 0.0)
+    warmup_lr_init = training_config.get('warmup_lr_init', 0.0)
     
     lr_scheduler = CosineLRScheduler(
         optimizer,
         t_initial=total_training_steps, # Total number of training steps for one cycle
         lr_min=min_lr,      # Minimum learning rate to decay to
         warmup_t=warmup_steps,          # Number of warmup steps
-        warmup_lr_init=0.0,             # Start warmup from LR 0.0 (or a very small value like 1e-6 * lr)
+        warmup_lr_init=warmup_lr_init,             # Start warmup from LR 0.0 (or a very small value like 1e-6 * lr)
         warmup_prefix=True,             # Ensures warmup is handled correctly before decay
         cycle_limit=1,                  # Number of cycles (1 for no restarts)
         t_in_epochs=False,              # t_initial and warmup_t are in steps, not epochs
@@ -682,6 +683,11 @@ def main(args):
         # Step the LR scheduler (typically after each epoch)
         lr_scheduler.step(epoch + 1)
 
+        if wandb_logger:
+            log_data = {
+                "val/epoch": epoch + 1, # Log current epoch number (1-indexed)
+            }
+
         # ---- Validation Step ----
         if (epoch + 1) % log_config.get('val_interval', 1) == 0:
             if val_loader:
@@ -705,6 +711,11 @@ def main(args):
                 if is_best:
                     best_val_loss = validation_loss
                     logger.info(f"Best validation loss updated to {best_val_loss:.4f} at epoch {epoch+1}.")
+                if wandb_logger:
+                    log_data["val/loss"] = validation_loss
+                    if validation_individual_loss:
+                        for loss_name, loss_value in validation_individual_loss.items():
+                            log_data[f"val/{loss_name}"] = loss_value
             else:
                 is_best = False
                 logger.info(f"Epoch {epoch+1}: No validation loader available, skipping validation.")
@@ -733,16 +744,6 @@ def main(args):
 
         # ---- W&B Metric Logging ----
         if wandb_logger:
-            log_data = {
-                "val/epoch": epoch + 1, # Log current epoch number (1-indexed)
-            }
-            if validation_loss is not None: # Only log validation loss if validation was run
-                log_data["val/loss"] = validation_loss
-
-            if validation_individual_loss:
-                for loss_name, loss_value in validation_individual_loss.items():
-                    log_data[f"val/{loss_name}"] = loss_value
-            
             wandb.log(log_data, step=global_step) # Log metrics against global_step
             # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 
             # Logging against global_step is often preferred for step-based LR schedules

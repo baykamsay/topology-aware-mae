@@ -179,8 +179,27 @@ class MaskedAutoencoderViT(nn.Module):
         try:
             checkpoint = torch.load(pretrained_path, map_location='cpu')
             state_dict = checkpoint.get('model', checkpoint)
+            # Remove pos_embed in the state_dict if it exists
+            if 'pos_embed' in state_dict:
+                del state_dict['pos_embed']
+
+            # Interpolate patch_embed weights if necessary
+            if 'patch_embed.proj.weight' in state_dict:
+                pretrained_patch_embed_weight = state_dict['patch_embed.proj.weight']
+                # Assuming square patches, shape is [out_channels, in_channels, patch_size, patch_size]
+                pretrained_patch_size = pretrained_patch_embed_weight.shape[-1]
+                
+                if pretrained_patch_size != self.patch_size:
+                    print(f"Interpolating patch_embed weights from {pretrained_patch_size}x{pretrained_patch_size} to {self.patch_size}x{self.patch_size}")
+                    interpolated_weight = torch.nn.functional.interpolate(
+                        pretrained_patch_embed_weight,
+                        size=(self.patch_size, self.patch_size),
+                        mode='bicubic',
+                        align_corners=False
+                    )
+                    state_dict['patch_embed.proj.weight'] = interpolated_weight
             
-            self.encoder.load_state_dict(state_dict, strict=False)
+            self.load_state_dict(state_dict, strict=False)
             print(f"Loaded pretrained encoder from {pretrained_path}")
         except Exception as e:
             print(f"Error loading pretrained encoder: {e}")
