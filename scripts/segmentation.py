@@ -268,9 +268,9 @@ def main(args):
     # ---- End setting up device ----
 
     # ---- Start Dataset and DataLoader setup ----
-    img_mean = [0.33627802, 0.33987136, 0.29782979]
-    img_std = [0.19191039, 0.18239774, 0.18225507]
-    input_size = data_config.get('input_size', 56) 
+    img_mean = [0.485, 0.456, 0.406]
+    img_std = [0.229, 0.224, 0.225]
+    input_size = data_config.get('input_size', 56)
 
     joint_transform = JointTransforms(
         h_flip_prob=0.5,

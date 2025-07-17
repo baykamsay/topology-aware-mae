@@ -11,7 +11,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Function to handle denormalization and image preparation for W&B
-def denormalize(tensor, mean=[0.33627802, 0.33987136, 0.29782979], std=[0.19191039, 0.18239774, 0.18225507]):
+def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     # Clone to avoid modifying the original tensor
     tensor = tensor.clone()
     mean = torch.tensor(mean, device=tensor.device).view(1, 3, 1, 1)

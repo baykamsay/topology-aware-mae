@@ -2,25 +2,25 @@
 model:
   name: mae_vit_base_patch16
   pretrained_path: "./pretrained_models/mae_pretrain_vit_base.pth" # Path to pre-trained model weights
-  patch_size: 4
+  patch_size: 8
   mask_ratio: 0.75
 
 # Loss Configuration
 loss:
-  name: mse
+  name: betti_matching
   norm_pix_loss: true
-  # alpha: 0.005
-  # alpha_warmup_epochs: 0
-  # alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
-  # filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
-  # push_unmatched_to_1_0: false
-  # barcode_length_threshold: 0.0 # ignore barcodes with length < threshold, set to a small value
-  # sphere: true
-  # calculate_channels_separately: true # Calculate Betti numbers for each channel separately
+  alpha: 0.005
+  alpha_warmup_epochs: 0
+  alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
+  filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
+  push_unmatched_to_1_0: false
+  barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
+  sphere: false
+  calculate_channels_separately: false # Calculate Betti numbers for each channel separately
   
 # Data Configuration
 data:
-  input_size: 48
+  input_size: 96
   augmentation:
     name: RandomResizedCrop 
     scale: [0.2, 1.] # Scale range for RandomResizedCrop
@@ -36,12 +36,12 @@ training:
   weight_decay: 0.05
   beta1: 0.9
   beta2: 0.95
-  frozen_encoder_epochs: 5 # Number of epochs to freeze encoder, set to 0 for no freezing
+  # frozen_encoder_epochs: 5 # Number of epochs to freeze encoder, set to 0 for no freezing
   # Learning Rate Schedule
   learning_rate: 1.e-4 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 5
-  warmup_lr_init: 1.e-3 # Can use to have high LR for decoder during warmup
+  warmup_lr_init: 0.0 # Can use to have high LR for decoder during warmup
   # Training loop
   epochs: 20 # Adjust as needed
   batch_size: 56 # Adjust based on GPU memory
@@ -52,7 +52,7 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "vitmae_test_4" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
