@@ -27,7 +27,7 @@ data:
     ratio: [0.75, 1.3333] # Aspect ratio range for RandomResizedCrop
   data_path: "./data/pretrain/massgis_split_test/train"
   eval_data_path: "./data/pretrain/massgis_split_test/val"
-  num_workers: 16
+  num_workers: 8
 
 # Pre-training Hyperparameters
 training:

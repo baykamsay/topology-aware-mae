@@ -25,7 +25,9 @@ class BettiMatchingWithMSELoss(nn.Module):
                  barcode_length_threshold=0.0, # ignore barcodes with length < threshold, set to a small value
                  topology_weights=(1., 1.), # weights for the topology classes in the following order: [matched, unmatched]. Possibly give matched (roads) higher weight
                  sphere=False,
-                 calculate_channels_separately=False):
+                 calculate_channels_separately=False,
+                 num_processes=16, # Number of processes for Betti Matching
+                 **kwargs):
         super().__init__()
         self.patchify = model.patchify
         self.unpatchify = model.unpatchify
@@ -34,13 +36,6 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha_warmup_epochs = alpha_warmup_epochs
         self.alpha_mse_treshold = alpha_mse_treshold
         self.calculate_channels_separately = calculate_channels_separately
-
-        try:
-            num_processes = int(os.getenv('SLURM_CPUS_PER_TASK', '16'))
-            if num_processes <= 0: # Ensure positive
-                num_processes = 16
-        except ValueError:
-            num_processes = 16 # Fallback if conversion fails
 
         # Initialize losses
         self.BMLoss = BettiMatchingLoss(

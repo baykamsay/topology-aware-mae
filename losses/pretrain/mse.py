@@ -11,12 +11,12 @@ class MaskedMSELoss(nn.Module):
     Only computes the loss on masked tokens.
     """
     
-    def __init__(self, model, norm_pix_loss=False):
+    def __init__(self, model, norm_pix_loss=False, **kwargs):
         super().__init__()
         self.patchify = model.patchify
         self.norm_pix_loss = norm_pix_loss
 
-    def forward(self, imgs, pred, mask, epoch):
+    def forward(self, imgs, pred, mask, **kwargs):
         """
         imgs: [N, 3, H, W]
         pred: [N, L, p*p*3]
