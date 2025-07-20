@@ -439,7 +439,6 @@ def main(args):
     model_params = {k: v for k, v in model_config.items() if k != "name"}
     
     loss_config = config.get('loss', {})
-    loss_config['num_processes'] = num_workers
     model_params['loss_config'] = loss_config
     
     model_params['img_size'] = config.get('data', {}).get('input_size', 112)
