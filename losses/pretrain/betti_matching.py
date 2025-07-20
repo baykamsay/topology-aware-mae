@@ -96,13 +96,8 @@ class BettiMatchingWithMSELoss(nn.Module):
         pred_img = self.unpatchify(pred_patches)
 
         if self.calculate_channels_separately:
-            # Calculate Betti Matching loss for each channel separately
-            bm_loss = 0.0
-            for c in range(pred_img.shape[1]):
-                pred_channel = pred_img[:, c, :, :].unsqueeze(1)
-                target_channel = imgs[:, c, :, :].unsqueeze(1)
-                bm_loss += self.BMLoss(pred_channel, target_channel)
-            bm_loss /= pred_img.shape[1]  # Average over channels
+            # Each channel is treated as a class
+            bm_loss = self.BMLoss(pred_img, imgs)
         else:
             pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
             target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
