@@ -748,14 +748,6 @@ def main(args):
         
         # ---- End Validation Step ----
 
-        # ---- W&B Metric Logging ----
-        if wandb_logger:
-            wandb.log(log_data, step=global_step) # Log metrics against global_step
-            # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 
-            # Logging against global_step is often preferred for step-based LR schedules
-
-        # ---- End W&B Metric Logging ----
-
         # ---- W&B Visualization Logging ----
         vis_interval = log_config.get('vis_interval', 20)
         if wandb_logger and log_config.get('include_vis', False) and val_loader: # Use val_loader for visualization samples
@@ -772,6 +764,14 @@ def main(args):
                    num_images=8 # Or get from config
                )
         # ---- End W&B Visualization ----
+
+        # ---- W&B Metric Logging ----
+        if wandb_logger:
+            wandb.log(log_data) # Log metrics against global_step
+            # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 
+            # Logging against global_step is often preferred for step-based LR schedules
+
+        # ---- End W&B Metric Logging ----
 
     # ---- End of Training Loop ----
     logger.info("Pretraining completed successfully.")
