@@ -324,12 +324,15 @@ def main(args):
     img_std = [0.229, 0.224, 0.225]
     # img_mean = [0.33627802, 0.33987136, 0.29782979]
     # img_std = [0.19191039, 0.18239774, 0.18225507]
+    max_scale = augmentation_config.get('max_scale', 1.0)
+    min_scale = max_scale * augmentation_config.get('min_scale_weight', 0.2)
+    max_ratio = augmentation_config.get('max_ratio', 1.33)
 
     if augmentation_config.get('name') == 'RandomResizedCrop':
         train_transform = transforms.Compose([
             transforms.RandomResizedCrop(input_size,
-                                         scale=augmentation_config.get('scale', [0.2, 1.]),
-                                         ratio=augmentation_config.get('ratio', [0.75, 1.3333]),
+                                         scale=[min_scale, max_scale],
+                                         ratio=[1 / max_ratio, max_ratio],
                                          interpolation=transforms.InterpolationMode.BICUBIC),
             # transforms.RandomHorizontalFlip(),
             # transforms.RandomVerticalFlip(),
