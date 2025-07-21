@@ -17,6 +17,7 @@ import numpy as np
 import wandb
 from timm.scheduler.cosine_lr import CosineLRScheduler
 import threading
+import signal
 
 # Adjust the path to include the root directory
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -299,6 +300,14 @@ def main(args):
     else:
         logger.info("W&B logging is disabled in the configuration.")
     # ---- End W&B Initialization ----
+
+    def signal_handler(sig, frame):
+        logger.info("Received termination signal. Finishing W&B run and exiting gracefully.")
+        if wandb_logger:
+            wandb_logger.finish()
+        sys.exit(0)
+
+    signal.signal(signal.SIGTERM, signal_handler)
 
     # ---- Start setting up device ----
     if torch.cuda.is_available():
@@ -614,7 +623,7 @@ def main(args):
 
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
-    for epoch in range(start_epoch, total_epochs):
+    for epoch in range(start_epoch, 90):
         # Check to unfreeze encoder if needed
         if encoder_frozen and epoch >= training_config.get('frozen_encoder_epochs', 0):
             logger.info(f"Unfreezing encoder parameters at epoch {epoch+1}.")
