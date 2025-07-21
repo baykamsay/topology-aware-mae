@@ -362,10 +362,10 @@ def main(args):
         sys.exit(1)
 
     # whole_size = 420 if input_size == 112 else 840
-    crop_size = input_size * 2 if input_size < 63 else input_size
+    # crop_size = input_size * 2
     # Validation transforms
     val_transform = transforms.Compose([
-        transforms.CenterCrop(crop_size),
+        transforms.CenterCrop(336),
         transforms.Resize(input_size, interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
@@ -679,7 +679,7 @@ def main(args):
                     if individual_losses:
                         for loss_name, loss_value in individual_losses.items():
                             wandb_dict[f"train/{loss_name}"] = loss_value.item()
-                    wandb.log(wandb_dict, step=global_step)
+                    # wandb.log(wandb_dict, step=global_step)
                 # ---- End W&B Logging ----
 
         epoch_loss = running_loss / len(train_loader)
@@ -691,7 +691,8 @@ def main(args):
 
         if wandb_logger:
             log_data = {
-                "val/epoch": epoch + 1, # Log current epoch number (1-indexed)
+                "train/loss": epoch_loss,
+                "train/lr": current_epoch_end_lr,
             }
 
         # ---- Validation Step ----
@@ -753,7 +754,7 @@ def main(args):
         if wandb_logger and log_config.get('include_vis', False) and val_loader: # Use val_loader for visualization samples
            if (epoch + 1) % vis_interval == 0:
                logger.info(f"--- Generating Visualizations for Epoch {epoch+1} ---")
-               log_mae_visualizations(
+               visualizations = log_mae_visualizations(
                    model, 
                    val_loader, # Using validation loader for consistent visualization samples
                    device, 
@@ -763,6 +764,7 @@ def main(args):
                    wandb_logger,
                    num_images=8 # Or get from config
                )
+               log_data["Reconstructions"] = visualizations
         # ---- End W&B Visualization ----
 
         # ---- W&B Metric Logging ----

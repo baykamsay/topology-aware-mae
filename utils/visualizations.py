@@ -103,10 +103,11 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
         # images_to_log.append(wandb.Image(reconstructed_imgs_denorm[i], caption=f"Epoch {epoch+1} - Reconstructed {i+1}"))
         
     # Log the list of images
-    wandb_logger.log({"Reconstructions": images_to_log}, step=global_step) # Log against global step
-    logger.info(f"Logged {len(images_to_log)} reconstruction visualizations to W&B for epoch {epoch+1}.")
+    # wandb_logger.log({"Reconstructions": images_to_log}, step=global_step) # Log against global step
+    # logger.info(f"Logged {len(images_to_log)} reconstruction visualizations to W&B for epoch {epoch+1}.")
 
     model.train() # Set model back to training mode
+    return images_to_log
 
 
 def log_segmentation_visualizations(
