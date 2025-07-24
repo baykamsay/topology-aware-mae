@@ -294,6 +294,7 @@ def main(args):
                 logger.info(f"W&B logger initialized. Project: {wandb.run.project}, Run Name: {wandb.run.name}")
                 # Optionally watch the model (can increase overhead)
                 # wandb.watch(model, log='gradients', log_freq=1000) 
+            wandb.define_metric("val/loss", step_metric="epoch")
         except Exception as e:
             logger.error(f"Failed to initialize W&B: {e}. Disabling W&B logging.")
             wandb_logger = None # Ensure it's None if init fails
@@ -371,10 +372,10 @@ def main(args):
         sys.exit(1)
 
     # whole_size = 420 if input_size == 112 else 840
-    # crop_size = input_size * 2
+    crop_size = input_size * 2 if input_size < 63 else input_size
     # Validation transforms
     val_transform = transforms.Compose([
-        transforms.CenterCrop(336),
+        transforms.CenterCrop(crop_size),
         transforms.Resize(input_size, interpolation=transforms.InterpolationMode.BICUBIC),
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
@@ -623,7 +624,7 @@ def main(args):
 
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
-    for epoch in range(start_epoch, 90):
+    for epoch in range(start_epoch, total_epochs):
         # Check to unfreeze encoder if needed
         if encoder_frozen and epoch >= training_config.get('frozen_encoder_epochs', 0):
             logger.info(f"Unfreezing encoder parameters at epoch {epoch+1}.")
@@ -688,7 +689,7 @@ def main(args):
                     if individual_losses:
                         for loss_name, loss_value in individual_losses.items():
                             wandb_dict[f"train/{loss_name}"] = loss_value.item()
-                    # wandb.log(wandb_dict, step=global_step)
+                    wandb.log(wandb_dict, step=global_step)
                 # ---- End W&B Logging ----
 
         epoch_loss = running_loss / len(train_loader)
@@ -700,8 +701,7 @@ def main(args):
 
         if wandb_logger:
             log_data = {
-                "train/loss": epoch_loss,
-                "train/lr": current_epoch_end_lr,
+                "epoch": epoch + 1,
             }
 
         # ---- Validation Step ----
@@ -778,7 +778,7 @@ def main(args):
 
         # ---- W&B Metric Logging ----
         if wandb_logger:
-            wandb.log(log_data) # Log metrics against global_step
+            wandb.log(log_data, step=global_step) # Log metrics against global_step
             # Alternatively log against epoch: wandb.log(log_data, step=epoch + 1) 
             # Logging against global_step is often preferred for step-based LR schedules
 
