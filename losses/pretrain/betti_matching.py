@@ -8,6 +8,11 @@ import torch.nn as nn
 import torchvision.transforms.functional as TF
 from topolosses.losses.betti_matching import BettiMatchingLoss
 from .mse import MaskedMSELoss
+import time
+try:
+    import wandb
+except Exception:
+    wandb = None
 
 class BettiMatchingWithMSELoss(nn.Module):
     """
@@ -27,6 +32,7 @@ class BettiMatchingWithMSELoss(nn.Module):
                  sphere=False,
                  calculate_channels_separately=False,
                  num_processes=16, # Number of processes for Betti Matching
+                 log_timing=False,
                  **kwargs):
         super().__init__()
         self.patchify = model.patchify
@@ -36,6 +42,7 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha_warmup_epochs = alpha_warmup_epochs
         self.alpha_mse_treshold = alpha_mse_treshold
         self.calculate_channels_separately = calculate_channels_separately
+        self.log_timing = log_timing
 
         # Initialize losses
         self.BMLoss = BettiMatchingLoss(
@@ -69,6 +76,12 @@ class BettiMatchingWithMSELoss(nn.Module):
         mask: [N, L], 0 is keep, 1 is remove
         epoch: current training epoch
         """
+        # Start timing
+        if self.log_timing:
+            use_cuda = (isinstance(imgs, torch.Tensor) and imgs.is_cuda) or (isinstance(pred, torch.Tensor) and getattr(pred, "is_cuda", False))
+            if use_cuda:
+                torch.cuda.synchronize()
+            t_total_start = time.perf_counter()
 
         if len(pred.shape) == 4:
             n, c, _, _ = pred.shape
@@ -86,8 +99,18 @@ class BettiMatchingWithMSELoss(nn.Module):
             target_norm = (target - mean) / (var + 1.e-6)**.5
             pred_denorm = pred * (var + 1.e-6)**0.5 + mean
 
+        if self.log_timing:
+            if use_cuda:
+                torch.cuda.synchronize()
+            t_mse_start = time.perf_counter()
+        
         # Compute masked MSE loss
         mse_loss = self.calculate_mse_loss(target_norm, pred, mask)
+
+        if self.log_timing:
+            if use_cuda:
+                torch.cuda.synchronize()
+            mse_ms = (time.perf_counter() - t_mse_start) * 1e3
 
         # Compute Betti Matching loss
         # Combine masked patches from prediction with unmasked patches from target
@@ -95,6 +118,10 @@ class BettiMatchingWithMSELoss(nn.Module):
         pred_patches = mask_expanded * pred_denorm + (1 - mask_expanded) * target
         pred_img = self.unpatchify(pred_patches)
 
+        if self.log_timing:
+            if use_cuda:
+                torch.cuda.synchronize()
+            t_bm_start = time.perf_counter()
         if self.calculate_channels_separately:
             # Each channel is treated as a class
             bm_loss = self.BMLoss(pred_img, imgs)
@@ -103,7 +130,11 @@ class BettiMatchingWithMSELoss(nn.Module):
             target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
 
             bm_loss = self.BMLoss(pred_img, target_img)
-
+        if self.log_timing:
+            if use_cuda:
+                torch.cuda.synchronize()
+            bm_ms = (time.perf_counter() - t_bm_start) * 1e3
+        
         # Combine losses
         alpha = self.alpha
         if epoch >= 0 and epoch < self.alpha_warmup_epochs:
@@ -113,6 +144,19 @@ class BettiMatchingWithMSELoss(nn.Module):
             alpha = 0
 
         loss = mse_loss + alpha * bm_loss
+
+        # Timing end
+        if self.log_timing:
+            if use_cuda:
+                torch.cuda.synchronize()
+            total_ms = (time.perf_counter() - t_total_start) * 1e3
+            if (wandb is not None) and (getattr(wandb, "run", None) is not None):
+                wandb.log({
+                    "timing/bm_ms": bm_ms,
+                    "timing/mse_ms": mse_ms,
+                    "timing/total_ms": total_ms,
+                }, commit=False)
+        
         return loss, {
             "bm_loss": bm_loss,
             "mse_loss": mse_loss
