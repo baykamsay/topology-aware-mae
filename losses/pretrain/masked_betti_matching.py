@@ -6,7 +6,8 @@ import os
 import torch
 import torch.nn as nn
 import torchvision.transforms.functional as TF
-from topolosses.losses.betti_matching import BettiMatchingLoss
+from ..utils.betti_matching_loss import BettiMatchingLoss
+from topolosses.losses.betti_matching import BettiMatchingLoss as LegacyBettiMatchingLoss
 from .mse import MaskedMSELoss
 import time
 try:

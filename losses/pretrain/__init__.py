@@ -1,7 +1,7 @@
 import logging
 from functools import partial
 from .mse import MaskedMSELoss
-from .betti_matching import BettiMatchingWithMSELoss
+from .masked_betti_matching import BettiMatchingWithMSELoss
 
 logger = logging.getLogger(__name__)
 
