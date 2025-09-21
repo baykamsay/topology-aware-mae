@@ -48,6 +48,7 @@ class BettiMatchingLoss(_Loss):
         sigmoid: bool = False,
         use_base_loss: bool = True,
         base_loss: Optional[_Loss] = None,
+        is_metric: bool = False,
     ) -> None:
         """
         Args:
@@ -112,6 +113,7 @@ class BettiMatchingLoss(_Loss):
         self.sigmoid = sigmoid
         self.use_base_loss = use_base_loss
         self.base_loss = base_loss
+        self.is_metric = is_metric
 
         if not self.use_base_loss:
             if base_loss is not None:
@@ -213,7 +215,16 @@ class BettiMatchingLoss(_Loss):
             "t_matched_d": [],
             "p_unmatched_b": [],
             "p_unmatched_d": [],
-        } # optionally add t_unmatched if we were to calculate BM error instead of loss
+        } if not self.is_metric else {
+            "p_matched_b": [],
+            "p_matched_d": [],
+            "t_matched_b": [],
+            "t_matched_d": [],
+            "p_unmatched_b": [],
+            "p_unmatched_d": [],
+            "t_unmatched_b": [],
+            "t_unmatched_d": [],
+        }
 
         # Gather all coordinates from all batches
         current_instance_index = 0
@@ -234,7 +245,7 @@ class BettiMatchingLoss(_Loss):
             predictions_cpu_batch = [np.ascontiguousarray(a) for a in predictions_cpu_batch]
             targets_cpu_batch = [np.ascontiguousarray(a) for a in targets_cpu_batch]
 
-            results_cpu_batch = betti_matching.compute_matching(predictions_cpu_batch, targets_cpu_batch, include_input2_unmatched_pairs=False)
+            results_cpu_batch = betti_matching.compute_matching(predictions_cpu_batch, targets_cpu_batch, include_input2_unmatched_pairs=self.is_metric)
 
             for result_arrays in results_cpu_batch:
                 def gather_coordinates(coords_list, num_dims=2):
@@ -251,6 +262,9 @@ class BettiMatchingLoss(_Loss):
                 bm_results["t_matched_d"].append(gather_coordinates(result_arrays.input2_matched_death_coordinates, num_dims=num_dimensions))
                 bm_results["p_unmatched_b"].append(gather_coordinates(result_arrays.input1_unmatched_birth_coordinates, num_dims=num_dimensions))
                 bm_results["p_unmatched_d"].append(gather_coordinates(result_arrays.input1_unmatched_death_coordinates, num_dims=num_dimensions))
+                if self.is_metric:
+                    bm_results["t_unmatched_b"].append(gather_coordinates(result_arrays.input2_unmatched_birth_coordinates, num_dims=num_dimensions))
+                    bm_results["t_unmatched_d"].append(gather_coordinates(result_arrays.input2_unmatched_death_coordinates, num_dims=num_dimensions))
                 
                 current_instance_index += 1
 
@@ -267,8 +281,11 @@ class BettiMatchingLoss(_Loss):
         t_matched_d_idx = to_tensor_idx(bm_results["t_matched_d"])
         p_unmatched_b_idx = to_tensor_idx(bm_results["p_unmatched_b"])
         p_unmatched_d_idx = to_tensor_idx(bm_results["p_unmatched_d"])
+        if self.is_metric:
+            t_unmatched_b_idx = to_tensor_idx(bm_results["t_unmatched_b"])
+            t_unmatched_d_idx = to_tensor_idx(bm_results["t_unmatched_d"])
 
-        # Squeeze input and target to remove channel dimension
+        # Squeeze input and target to remove channel dimension TODO fix for multiclass
         input = input.squeeze(1)
         target = target.squeeze(1)
 
@@ -298,5 +315,23 @@ class BettiMatchingLoss(_Loss):
                 loss_unmatched_pred = 2 * (torch.sum((pred_unmatched_birth - 1) ** 2) + torch.sum(pred_unmatched_death ** 2))
             else:
                 loss_unmatched_pred = torch.sum((pred_unmatched_birth - pred_unmatched_death) ** 2)
+        
+        if self.is_metric and t_unmatched_b_idx is not None:
+            target_unmatched_birth = target[tuple(t_unmatched_b_idx)]
+            target_unmatched_death = target[tuple(t_unmatched_d_idx)]
+
+            # Filter out short-lived features based on barcode_length_threshold
+            if self.barcode_length_threshold > 0:
+                lengths = torch.abs(target_unmatched_birth - target_unmatched_death)
+                mask = lengths > self.barcode_length_threshold
+                target_unmatched_birth = target_unmatched_birth[mask]
+                target_unmatched_death = target_unmatched_death[mask]
+            
+            # Calculate loss for unmatched pairs in target (for metric purposes)
+            if self.push_unmatched_to_1_0:
+                loss_unmatched_target = 2 * (torch.sum((target_unmatched_birth - 1) ** 2) + torch.sum(target_unmatched_death ** 2))
+            else:
+                loss_unmatched_target = torch.sum((target_unmatched_birth - target_unmatched_death) ** 2)
+            loss_unmatched_pred += loss_unmatched_target
         
         return (loss_matched * self.topology_weights[0] + loss_unmatched_pred * self.topology_weights[1]) / current_instance_index
