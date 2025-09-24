@@ -1,8 +1,8 @@
 # Model Configuration
 model:
   name: mae_vit_base_patch16
-  pretrained_path: "./pretrained_models/mae_pretrain_vit_base.pth" # Path to pre-trained model weights
-  patch_size: 8
+  pretrained_path: "/vol/miltank/users/sayb/projects/topo-conv-mae/pretrained_models/mae_pretrain_vit_base.pth" # Path to pre-trained model weights
+  patch_size: 4
   mask_ratio: 0.75
 
 # Loss Configuration
@@ -10,27 +10,26 @@ loss:
   name: betti_matching
   norm_pix_loss: true
   alpha: 0.005
-  alpha_warmup_epochs: 0
+  alpha_warmup_epochs: 20
   alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
   filtration: "superlevel"  # Available options: "superlevel", "sublevel", "bothlevels"
   push_unmatched_to_1_0: false
   barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
   sphere: false
   calculate_channels_separately: false # Calculate Betti numbers for each channel separately
-  num_processes: 8
+  num_processes: 32
   log_timing: false # Log timing for Betti Matching loss computation
   
 # Data Configuration
 data:
   input_size: 48
   augmentation:
-    name: CenterCrop 
-    # max_scale: 1.0 # Maximum scale for RandomResizedCrop
-    # min_scale_weight: 0.2 # Minimum scale for RandomResizedCrop
-    # max_ratio: 1.33 # Maximum aspect ratio for RandomResizedCrop
-  data_path: "./data/pretrain/massgis_split_test/train"
-  eval_data_path: "./data/pretrain/massgis_split_test/val"
-  num_workers: 8
+    name: RandomResizedCrop 
+    scale: [0.2, 1.0] # Scale range for RandomResizedCrop
+    ratio: [0.75, 1.3333] # Aspect ratio range for RandomResizedCrop
+  data_path: "/vol/miltank/users/sayb/datasets/massgis_split/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_split/val"
+  num_workers: 32
 
 # Pre-training Hyperparameters
 training:
@@ -39,15 +38,15 @@ training:
   weight_decay: 0.05
   beta1: 0.9
   beta2: 0.95
-  # frozen_encoder_epochs: 5 # Number of epochs to freeze encoder, set to 0 for no freezing
+  frozen_encoder_epochs: 20
   # Learning Rate Schedule
-  learning_rate: 1.e-4 # Base LR
+  learning_rate: 1.5e-4 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 1
-  warmup_lr_init: 0.0 # Can use to have high LR for decoder during warmup
+  warmup_epochs: 10
+  warmup_lr_init: 0.0
   # Training loop
-  epochs: 3 # Adjust as needed
-  batch_size: 256 # Adjust based on GPU memory
+  epochs: 200 # Adjust as needed
+  batch_size: 768 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
@@ -55,13 +54,13 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: false
+  enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "timing_quick_optimized" # Optional custom run name
-  # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
-  output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
+  wandb_run_name: "vitmae_bm_48_4_low_alpha" # Optional custom run name
+  wandb_run_id: "vitmae_bm_48_4_low_alpha" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_bm_48_4_low_alpha" # Checkpoint dir
   val_interval: 1 # validation interval
   log_interval: 1 # wandb log interval
-  include_vis: false # Include visualizations
-  # vis_interval: 1 # visualization interval
-  checkpointing: false
+  include_vis: true # Include visualizations
+  vis_interval: 1 # visualization interval
+  checkpointing: true
