@@ -1,7 +1,7 @@
 # Model Configuration
 model:
   name: convnextv2_pico
-  # pretrained_path: "./pretrained_models/convnextv2_pico_1k_224_fcmae.pt" # Path to pre-trained model weights
+  pretrained_path: "./pretrained_models/convnextv2_pico_1k_224_fcmae.pt" # Path to pre-trained model weights
   patch_size: 32
   decoder_depth: 1
   decoder_embed_dim: 512

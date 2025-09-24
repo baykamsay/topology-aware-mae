@@ -68,13 +68,14 @@ class MaskedAutoencoderViT(nn.Module):
         
         # --------------------------------------------------------------------------
         # MAE encoder specifics
-        self.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
-        num_patches = self.patch_embed.num_patches
+        self.encoder = nn.Module()
+        self.encoder.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
+        num_patches = self.encoder.patch_embed.num_patches
 
-        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
-        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
+        self.encoder.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.encoder.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim), requires_grad=False)  # fixed sin-cos embedding
 
-        self.blocks = nn.ModuleList([
+        self.encoder.blocks = nn.ModuleList([
             Block(
                 dim=embed_dim,
                 num_heads=num_heads,
@@ -85,7 +86,7 @@ class MaskedAutoencoderViT(nn.Module):
             )
             for _ in range(depth)
         ])
-        self.norm = norm_layer(embed_dim)
+        self.encoder.norm = norm_layer(embed_dim)
         # --------------------------------------------------------------------------
 
         # --------------------------------------------------------------------------
@@ -125,26 +126,26 @@ class MaskedAutoencoderViT(nn.Module):
         Initialize the weights of the model.
         """
         # Initialize patch_embed like nn.Linear (instead of nn.Conv2d)
-        w = self.patch_embed.proj.weight.data
+        w = self.encoder.patch_embed.proj.weight.data
         torch.nn.init.xavier_uniform_(w.view([w.shape[0], -1]))
 
         # Initialize cls token
-        torch.nn.init.normal_(self.cls_token, std=0.02)
+        torch.nn.init.normal_(self.encoder.cls_token, std=0.02)
         
         # Initialize mask token
         torch.nn.init.normal_(self.mask_token, std=0.02)
 
         # Calculate grid size based on the patch embedding
         # This ensures proper compatibility with different image sizes
-        grid_size = int(self.patch_embed.num_patches**0.5)
+        grid_size = int(self.encoder.patch_embed.num_patches**0.5)
 
         # Initialize position embeddings
         pos_embed = get_2d_sincos_pos_embed(
-            self.pos_embed.shape[-1],
+            self.encoder.pos_embed.shape[-1],
             grid_size,
             cls_token=True
         )
-        self.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
+        self.encoder.pos_embed.data.copy_(torch.from_numpy(pos_embed).float().unsqueeze(0))
 
         decoder_pos_embed = get_2d_sincos_pos_embed(
             self.decoder_pos_embed.shape[-1],
@@ -188,7 +189,7 @@ class MaskedAutoencoderViT(nn.Module):
                 pretrained_patch_embed_weight = state_dict['patch_embed.proj.weight']
                 # Assuming square patches, shape is [out_channels, in_channels, patch_size, patch_size]
                 pretrained_patch_size = pretrained_patch_embed_weight.shape[-1]
-                
+
                 if pretrained_patch_size != self.patch_size:
                     print(f"Interpolating patch_embed weights from {pretrained_patch_size}x{pretrained_patch_size} to {self.patch_size}x{self.patch_size}")
                     interpolated_weight = torch.nn.functional.interpolate(
@@ -199,7 +200,7 @@ class MaskedAutoencoderViT(nn.Module):
                     )
                     state_dict['patch_embed.proj.weight'] = interpolated_weight
             
-            self.load_state_dict(state_dict, strict=False)
+            self.encoder.load_state_dict(state_dict, strict=False)
             print(f"Loaded pretrained encoder from {pretrained_path}")
         except Exception as e:
             print(f"Error loading pretrained encoder: {e}")
@@ -327,16 +328,16 @@ class MaskedAutoencoderViT(nn.Module):
                 - (Optional) List of intermediate features
         """
         # Embed patches
-        x = self.patch_embed(x)
+        x = self.encoder.patch_embed(x)
 
         # Add position embeddings (without cls token)
-        x = x + self.pos_embed[:, 1:, :]
+        x = x + self.encoder.pos_embed[:, 1:, :]
 
         # Masking: length -> length * mask_ratio
         x, mask, ids_restore = self.random_masking(x, mask_ratio)
 
         # Append cls token
-        cls_token = self.cls_token + self.pos_embed[:, :1, :]
+        cls_token = self.encoder.cls_token + self.encoder.pos_embed[:, :1, :]
         cls_tokens = cls_token.expand(x.shape[0], -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
 
@@ -345,15 +346,15 @@ class MaskedAutoencoderViT(nn.Module):
         interval = self.depth // 4
         
         # Apply Transformer blocks
-        for i, blk in enumerate(self.blocks):
+        for i, blk in enumerate(self.encoder.blocks):
             x = blk(x)
             
             # Extract features at fixed intervals (d/4, 2d/4, 3d/4, d)
             if return_intermediate and (i + 1) % interval == 0:
-                intermediate_features.append(self.norm(x.clone()))
+                intermediate_features.append(self.encoder.norm(x.clone()))
 
         # Apply final normalization
-        x = self.norm(x)
+        x = self.encoder.norm(x)
         
         if return_intermediate:
             return x, mask, ids_restore, intermediate_features
@@ -448,24 +449,20 @@ class MaskedAutoencoderViT(nn.Module):
         """
         # Create a VisionTransformer with the same parameters as the encoder
         encoder = VisionTransformer(
-            img_size=self.patch_embed.img_size[0],
-            patch_size=self.patch_embed.patch_size[0],
+            img_size=self.encoder.patch_embed.img_size[0],
+            patch_size=self.encoder.patch_embed.patch_size[0],
             in_chans=3,
-            embed_dim=self.pos_embed.shape[-1],
-            depth=len(self.blocks),
-            num_heads=self.blocks[0].attn.num_heads,
+            embed_dim=self.encoder.pos_embed.shape[-1],
+            depth=len(self.encoder.blocks),
+            num_heads=self.encoder.blocks[0].attn.num_heads,
             mlp_ratio=4.0,
             global_pool=False,  # No global pooling
             num_classes=0,  # No classification head
         )
         
-        # Copy the weights from the encoder part of the MAE
-        encoder.patch_embed = self.patch_embed
-        encoder.cls_token = self.cls_token
-        encoder.pos_embed = self.pos_embed
-        encoder.blocks = self.blocks
-        encoder.norm = self.norm
-        
+        # Copy the weights from the encoder part of the MAE TODO
+        encoder = self.encoder
+
         return encoder
 
 
