@@ -285,7 +285,7 @@ class BettiMatchingLoss(_Loss):
             t_unmatched_b_idx = to_tensor_idx(bm_results["t_unmatched_b"])
             t_unmatched_d_idx = to_tensor_idx(bm_results["t_unmatched_d"])
 
-        # Squeeze input and target to remove channel dimension TODO fix for multiclass
+        # Squeeze input and target to remove channel dimension
         input = input.squeeze(1)
         target = target.squeeze(1)
 
