@@ -14,9 +14,17 @@ logger = logging.getLogger(__name__)
 def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
     # Clone to avoid modifying the original tensor
     tensor = tensor.clone()
-    mean = torch.tensor(mean, device=tensor.device).view(1, 3, 1, 1)
-    std = torch.tensor(std, device=tensor.device).view(1, 3, 1, 1)
+    
+    # Denormalize
+    if len(mean) == 1:
+        mean = torch.tensor(mean, device=tensor.device).view(1, 1, 1, 1)
+        std = torch.tensor(std, device=tensor.device).view(1, 1, 1, 1)
+    else:
+        mean = torch.tensor(mean, device=tensor.device).view(1, 3, 1, 1)
+        std = torch.tensor(std, device=tensor.device).view(1, 3, 1, 1)
+    
     tensor.mul_(std).add_(mean)
+
     # Clamp to valid image range [0, 1]
     tensor = torch.clamp(tensor, 0, 1)
     return tensor
@@ -82,8 +90,12 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
             logger.error("Model does not have unpatchify method. Cannot create reconstructed images.")
 
         # Denormalize original and reconstructed images
-        original_imgs_denorm = denormalize(samples)
-        reconstructed_imgs_denorm = denormalize(reconstructed_imgs)
+        if config.get('model', {}).get('in_chans', 3) == 3:
+            original_imgs_denorm = denormalize(samples)  # Assuming ImageNet mean/std
+            reconstructed_imgs_denorm = denormalize(reconstructed_imgs)
+        else:
+            original_imgs_denorm = denormalize(samples, [0.5], [0.5])  # For single channel
+            reconstructed_imgs_denorm = denormalize(reconstructed_imgs, [0.5], [0.5])
 
         # Create masked images (overlay mask on original)
         # Where img_mask_full is 1 (masked), set original image pixel to gray/black/etc.

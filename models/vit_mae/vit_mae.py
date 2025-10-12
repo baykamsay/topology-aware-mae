@@ -68,6 +68,7 @@ class MaskedAutoencoderViT(nn.Module):
         
         # --------------------------------------------------------------------------
         # MAE encoder specifics
+        self.in_chans = in_chans
         self.encoder = nn.Module()
         self.encoder.patch_embed = PatchEmbed(img_size, patch_size, in_chans, embed_dim)
         num_patches = self.encoder.patch_embed.num_patches
@@ -214,18 +215,18 @@ class MaskedAutoencoderViT(nn.Module):
         Convert images to patches.
         
         Args:
-            imgs: Input images of shape (N, 3, H, W)
+            imgs: Input images of shape (N, C, H, W)
             
         Returns:
-            Patches of shape (N, L, patch_size^2 * 3)
+            Patches of shape (N, L, patch_size^2 * C)
         """
         p = self.patch_size
         assert imgs.shape[2] == imgs.shape[3] and imgs.shape[2] % p == 0
 
         h = w = imgs.shape[2] // p
-        x = imgs.reshape(shape=(imgs.shape[0], 3, h, p, w, p))
+        x = imgs.reshape(shape=(imgs.shape[0], self.in_chans, h, p, w, p))
         x = torch.einsum('nchpwq->nhwpqc', x)
-        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * 3))
+        x = x.reshape(shape=(imgs.shape[0], h * w, p**2 * self.in_chans))
         return x
 
     def unpatchify(self, x: torch.Tensor) -> torch.Tensor:
@@ -233,10 +234,10 @@ class MaskedAutoencoderViT(nn.Module):
         Convert patches back to images.
         
         Args:
-            x: Patches of shape (N, L, patch_size^2 * 3)
+            x: Patches of shape (N, L, patch_size^2 * C)
             
         Returns:
-            Images of shape (N, 3, H, W)
+            Images of shape (N, C, H, W)
         """
         p = self.patch_size
         h = w = int(x.shape[1]**0.5)
@@ -245,11 +246,11 @@ class MaskedAutoencoderViT(nn.Module):
         assert h * w == x.shape[1], f"Number of patches {x.shape[1]} must be a perfect square"
         
         # Ensure patch size matches what we expect
-        assert x.shape[2] == p**2 * 3, f"Patch dimension {x.shape[2]} doesn't match expected size {p**2 * 3}"
+        assert x.shape[2] == p**2 * self.in_chans, f"Patch dimension {x.shape[2]} doesn't match expected size {p**2 * self.in_chans}"
         
-        # Reshape to [B, h, w, p, p, 3]
+        # Reshape to [B, h, w, p, p, c]
         try:
-            x = x.reshape(shape=(x.shape[0], h, w, p, p, 3))
+            x = x.reshape(shape=(x.shape[0], h, w, p, p, self.in_chans))
         except RuntimeError as e:
             print(f"Error reshaping patches: {e}")
             print(f"x.shape: {x.shape}, h: {h}, w: {w}, p: {p}")
@@ -258,7 +259,7 @@ class MaskedAutoencoderViT(nn.Module):
         # Permute and reshape to image
         try:
             x = torch.einsum('nhwpqc->nchpwq', x)
-            imgs = x.reshape(shape=(x.shape[0], 3, h * p, w * p))
+            imgs = x.reshape(shape=(x.shape[0], self.in_chans, h * p, w * p))
             return imgs
         except RuntimeError as e:
             print(f"Error in einsum/reshaping to image: {e}")
@@ -316,7 +317,7 @@ class MaskedAutoencoderViT(nn.Module):
         Forward pass through the encoder with masking.
         
         Args:
-            x: Input images of shape (N, 3, H, W)
+            x: Input images of shape (N, C, H, W)
             mask_ratio: Proportion of tokens to mask
             return_intermediate: Whether to return intermediate features
             
@@ -402,7 +403,7 @@ class MaskedAutoencoderViT(nn.Module):
         Forward pass of the model.
         
         Args:
-            imgs: Input images of shape (N, 3, H, W)
+            imgs: Input images of shape (N, C, H, W)
             mask_ratio: Proportion of tokens to mask
             return_all_tokens: Whether to return all tokens or just the masked ones
             return_intermediate: Whether to return intermediate features
@@ -425,7 +426,7 @@ class MaskedAutoencoderViT(nn.Module):
                 imgs, mask_ratio, return_intermediate=False
             )
             
-        pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*3]
+        pred = self.forward_decoder(latent, ids_restore)  # [N, L, p*p*c]
 
         loss, individual_losses = self.loss_func(imgs, pred, mask, epoch)
         

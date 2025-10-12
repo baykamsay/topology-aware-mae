@@ -329,57 +329,71 @@ def main(args):
     augmentation_config = config.get('data', {}).get('augmentation', {})
     # min_scale = config.get('data', {}).get('min_scale', 0.1)
     # max_scale = config.get('data', {}).get('max_scale', 0.5)
-    # ImageNet default mean and std
-    img_mean = [0.485, 0.456, 0.406]
-    img_std = [0.229, 0.224, 0.225]
-    # img_mean = [0.33627802, 0.33987136, 0.29782979]
-    # img_std = [0.19191039, 0.18239774, 0.18225507]
+    if config.get('model', {}).get('in_chans', 3) == 1:
+        # Single channel mean and std
+        img_mean = [0.5]
+        img_std = [0.5]
+    else:
+        # ImageNet default mean and std
+        img_mean = [0.485, 0.456, 0.406]
+        img_std = [0.229, 0.224, 0.225]
+        # Roads mean and std
+        # img_mean = [0.33627802, 0.33987136, 0.29782979]
+        # img_std = [0.19191039, 0.18239774, 0.18225507]
+    
     max_scale = augmentation_config.get('max_scale', 1.0)
     min_scale = max_scale * augmentation_config.get('min_scale_weight', 0.2)
     max_ratio = augmentation_config.get('max_ratio', 1.33)
 
     if augmentation_config.get('name') == 'RandomResizedCrop':
-        train_transform = transforms.Compose([
+        transforms_list = [
             transforms.RandomResizedCrop(input_size,
                                          scale=[min_scale, max_scale],
                                          ratio=[1 / max_ratio, max_ratio],
                                          interpolation=transforms.InterpolationMode.BICUBIC),
-            # transforms.RandomHorizontalFlip(),
-            # transforms.RandomVerticalFlip(),
-            # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=img_mean, std=img_std),
-        ])
+            transforms.RandomHorizontalFlip(),
+            transforms.RandomVerticalFlip(),
+        ]
     elif augmentation_config.get('name') == 'RandomCrop':
-        # Basic pre-training transforms
-        train_transform = transforms.Compose([
+        transforms_list = [
             transforms.RandomCrop(input_size),
-            # transforms.RandomHorizontalFlip(),
-            # transforms.RandomVerticalFlip(),
-            # transforms.RandomRotation(degrees=[0, 90, 180, 270], interpolation=InterpolationMode.NEAREST, expand=False),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=img_mean, std=img_std),
-        ])
+        ]
     elif augmentation_config.get('name') == 'CenterCrop':
-        # CenterCrop for testing purposes
-        train_transform = transforms.Compose([
+        transforms_list = [
             transforms.CenterCrop(input_size),
-            transforms.ToTensor(),
-            transforms.Normalize(mean=img_mean, std=img_std),
-        ])
+        ]
     else:
         logger.error(f"Unsupported augmentation type: {augmentation_config.get('name')}. Supported types: RandomResizedCrop, RandomCrop.")
         sys.exit(1)
 
-    # whole_size = 420 if input_size == 112 else 840
-    crop_size = input_size * 2 if input_size < 63 else input_size
-    # Validation transforms
-    val_transform = transforms.Compose([
-        transforms.CenterCrop(crop_size),
-        transforms.Resize(input_size, interpolation=transforms.InterpolationMode.BICUBIC),
+    if augmentation_config.get('grayscale', False):
+        transforms_list.append(transforms.Grayscale())
+
+    transforms_list.extend([
         transforms.ToTensor(),
         transforms.Normalize(mean=img_mean, std=img_std),
     ])
+
+    train_transform = transforms.Compose(transforms_list)
+
+    # whole_size = 420 if input_size == 112 else 840
+    crop_size = input_size * 2 if input_size < 63 else input_size
+
+    # Validation transforms
+    transforms_list = [
+        transforms.CenterCrop(crop_size),
+        transforms.Resize(input_size, interpolation=transforms.InterpolationMode.BICUBIC),
+    ]
+
+    if augmentation_config.get('grayscale', False):
+        transforms_list.append(transforms.Grayscale())
+
+    transforms_list.extend([
+        transforms.ToTensor(),
+        transforms.Normalize(mean=img_mean, std=img_std),
+    ])
+
+    val_transform = transforms.Compose(transforms_list)
 
     # Create datasets
     train_data_path = config.get('data', {}).get('data_path')
