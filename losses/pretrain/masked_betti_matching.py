@@ -32,6 +32,7 @@ class BettiMatchingWithMSELoss(nn.Module):
                  topology_weights=(1., 1.), # weights for the topology classes in the following order: [matched, unmatched]. Possibly give matched (roads) higher weight
                  sphere=False,
                  calculate_channels_separately=False,
+                 patchwise_bm=False,
                  num_processes=16, # Number of processes for Betti Matching
                  log_timing=False,
                  is_metric=False,
@@ -44,6 +45,7 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha_warmup_epochs = alpha_warmup_epochs
         self.alpha_mse_treshold = alpha_mse_treshold
         self.calculate_channels_separately = calculate_channels_separately
+        self.patchwise_bm = patchwise_bm
         self.log_timing = log_timing
         self.is_metric = is_metric
 
@@ -117,23 +119,41 @@ class BettiMatchingWithMSELoss(nn.Module):
             mse_ms = (time.perf_counter() - t_mse_start) * 1e3
 
         # Compute Betti Matching loss
-        # Combine masked patches from prediction with unmasked patches from target
-        mask_expanded = mask.unsqueeze(-1)
-        pred_patches = mask_expanded * pred_denorm + (1 - mask_expanded) * target
-        pred_img = self.unpatchify(pred_patches)
-
         if self.log_timing:
             if use_cuda:
                 torch.cuda.synchronize()
             t_bm_start = time.perf_counter()
-        if self.calculate_channels_separately:
-            # Each channel is treated as a class
-            bm_loss = self.BMLoss(pred_img, imgs)
-        else:
-            pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
-            target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
+        
+        if self.patchwise_bm:
+            n, l, pc = pred.shape
+            c = imgs.shape[1]
+            p = int((pc // c) ** 0.5)
+            
+            # pred_patches = pred.view(n, l, c, p, p).reshape(n, l * c, p, p)
+            # target_patches = target_norm.view(n, l, c, p, p).reshape(n, l * c, p, p)
+            # bm_loss = self.BMLoss(pred_patches, target_patches) # Calculates all patches
 
-            bm_loss = self.BMLoss(pred_img, target_img)
+            mask_bool = mask.bool()
+            num_masked = int(mask_bool[0].sum().item())
+            pred_masked = pred[mask_bool].view(n, num_masked, c, p, p).reshape(n, num_masked * c, p, p)
+            target_masked = target_norm[mask_bool].view(n, num_masked, c, p, p).reshape(n, num_masked * c, p, p)
+            bm_loss = self.BMLoss(pred_masked, target_masked)
+        else:
+            # Combine masked patches from prediction with unmasked patches from target
+            mask_expanded = mask.unsqueeze(-1)
+            pred_patches = mask_expanded * pred_denorm + (1 - mask_expanded) * target
+            pred_img = self.unpatchify(pred_patches)
+
+            
+            if self.calculate_channels_separately:
+                # Each channel is treated as a class
+                bm_loss = self.BMLoss(pred_img, imgs)
+            else:
+                pred_img = TF.rgb_to_grayscale(pred_img, num_output_channels=1)
+                target_img = TF.rgb_to_grayscale(imgs, num_output_channels=1)
+
+                bm_loss = self.BMLoss(pred_img, target_img)
+        
         if self.log_timing:
             if use_cuda:
                 torch.cuda.synchronize()

@@ -9,7 +9,7 @@ model:
 loss:
   name: betti_matching
   norm_pix_loss: true
-  alpha: 0.005
+  alpha: 0.02
   alpha_warmup_epochs: 0
   alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
   filtration: "superlevel"  # Available options: "superlevel", "sublevel", "bothlevels"
@@ -17,6 +17,7 @@ loss:
   barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
   sphere: false
   calculate_channels_separately: true # Calculate Betti numbers for each channel separately
+  patchwise_bm: false # Compute Betti Matching loss patch-wise
   num_processes: 8
   log_timing: false # Log timing for Betti Matching loss computation
   
@@ -56,7 +57,7 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_log_test" # Optional custom run name
+  wandb_run_name: "vitmae_test" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
   output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
   val_interval: 1 # validation interval
