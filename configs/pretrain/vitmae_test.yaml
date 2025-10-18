@@ -12,7 +12,7 @@ loss:
   alpha: 0.005
   alpha_warmup_epochs: 0
   alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
-  filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
+  filtration: "superlevel"  # Available options: "superlevel", "sublevel", "bothlevels"
   push_unmatched_to_1_0: false
   barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
   sphere: false
@@ -42,10 +42,10 @@ training:
   # Learning Rate Schedule
   learning_rate: 1.e-4 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 1
+  warmup_epochs: 2
   warmup_lr_init: 0.0 # Can use to have high LR for decoder during warmup
   # Training loop
-  epochs: 1 # Adjust as needed
+  epochs: 5 # Adjust as needed
   batch_size: 256 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
@@ -56,7 +56,7 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_test" # Optional custom run name
+  wandb_run_name: "vitmae_log_test" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
   output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
   val_interval: 1 # validation interval

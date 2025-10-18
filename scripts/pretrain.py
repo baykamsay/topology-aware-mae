@@ -23,6 +23,7 @@ import signal
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.insert(0, project_root)
 
+from losses.pretrain.masked_betti_matching import BettiMatchingWithMSELoss
 from utils.config import load_config, deep_update
 from utils.visualizations import log_mae_visualizations
 from models.convnextv2 import fcmae
@@ -54,7 +55,7 @@ def get_args_parser():
 
     return parser
 
-def validate(val_loader, model, device, config, use_mixed_precision, epoch):
+def validate(val_loader, model, device, config, use_mixed_precision, epoch, metric=None):
     """
     Performs validation on the validation dataset.
 
@@ -74,6 +75,7 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
     total_val_loss = 0.0
     num_val_batches = 0
     individual_loss_totals = {}  # Dictionary to accumulate individual losses
+    metric_totals = {}  # Dictionary to accumulate metric scores
 
     with torch.no_grad():  # Disable gradient calculations
         for batch_idx, (samples, _) in enumerate(val_loader):
@@ -83,10 +85,15 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
             if use_mixed_precision and device.type == 'cuda':
                 with torch.amp.autocast('cuda'):
                     # The model's forward method returns: loss, predicted_patches, mask
-                    loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
+                    loss, pred, mask, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
             else:
-                loss, _, _, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
+                loss, pred, mask, individual_losses = model(samples, mask_ratio=config.get('mask_ratio', 0.6), epoch=epoch)
             
+            # Calculate metrics
+            if metric is not None:
+                metric_scores = metric(samples, pred, mask, -1)
+
+
             total_val_loss += loss.item()
             num_val_batches += 1
 
@@ -96,6 +103,13 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
                     if loss_name not in individual_loss_totals:
                         individual_loss_totals[loss_name] = 0.0
                     individual_loss_totals[loss_name] += loss_value.item()
+            
+            # Accumulate metric scores
+            if metric is not None:
+                for score_name, score_value in metric_scores.items():
+                    if score_name not in metric_totals:
+                        metric_totals[score_name] = 0.0
+                    metric_totals[score_name] += score_value.item() if isinstance(score_value, torch.Tensor) else score_value
 
             if (batch_idx + 1) % 20 == 0: # Log progress every 20 val batches
                  logger.debug(f"Validation Epoch {epoch+1} - Batch {batch_idx+1}/{len(val_loader)}")
@@ -106,6 +120,7 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
         return 0.0, {}
         
     avg_val_loss = total_val_loss / num_val_batches
+    avg_metrics = {k: v / num_val_batches for k, v in metric_totals.items()}
 
     # Calculate averages for individual losses
     avg_individual_losses = {}
@@ -115,7 +130,7 @@ def validate(val_loader, model, device, config, use_mixed_precision, epoch):
             for loss_name, total_loss in individual_loss_totals.items()
         }
 
-    return avg_val_loss, avg_individual_losses
+    return avg_val_loss, avg_metrics, avg_individual_losses
 
 def unfreeze_encoder(model, optimizer, lr, weight_decay, beta1, beta2):
     """
@@ -636,6 +651,22 @@ def main(args):
         logger.info("No checkpoint found or specified to resume from. Starting training from scratch.")
     # ---- End Checkpoint Loading ----
 
+    # ---- Initialize validation metrics ----
+    if val_loader:
+        metric = BettiMatchingWithMSELoss(
+            model,
+            norm_pix_loss=loss_config.get('norm_pix_loss', False),
+            filtration='bothlevels',
+            push_unmatched_to_1_0=False,
+            barcode_length_threshold=0.0,
+            topology_weights=(1., 1.),
+            sphere=False,
+            calculate_channels_separately=True,
+            num_processes=loss_config.get('num_processes', 16),
+            log_timing=False,
+            is_metric=True
+        )
+
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
     for epoch in range(start_epoch, total_epochs):
@@ -722,15 +753,19 @@ def main(args):
         if (epoch + 1) % log_config.get('val_interval', 1) == 0:
             if val_loader:
                 logger.info(f"--- Starting Validation for Epoch {epoch+1} ---")
-                validation_loss, validation_individual_loss = validate(
+                validation_loss, metric_scores, validation_individual_loss = validate(
                     val_loader, 
                     model, 
                     device, 
                     model_config,
                     use_mixed_precision,
-                    epoch
+                    epoch,
+                    metric=metric
                 )
                 log_msg = f"====> Epoch {epoch+1} | Validation Loss: {validation_loss:.4f}"
+                if metric_scores:
+                    individual_loss_str = " | ".join([f"{loss_name}: {loss_value:.4f}" for loss_name, loss_value in metric_scores.items()])
+                    log_msg += f" | {individual_loss_str}"
                 if validation_individual_loss:
                     individual_loss_str = " | ".join([f"{loss_name}: {loss_value:.4f}" for loss_name, loss_value in validation_individual_loss.items()])
                     log_msg += f" | {individual_loss_str}"
@@ -746,6 +781,8 @@ def main(args):
                     if validation_individual_loss:
                         for loss_name, loss_value in validation_individual_loss.items():
                             log_data[f"val/{loss_name}"] = loss_value
+                    for name, score in metric_scores.items():
+                        log_data[f"val/{name}"] = score
             else:
                 is_best = False
                 logger.info(f"Epoch {epoch+1}: No validation loader available, skipping validation.")

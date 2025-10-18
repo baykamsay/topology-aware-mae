@@ -27,13 +27,14 @@ class BettiMatchingWithMSELoss(nn.Module):
                  alpha_warmup_epochs=0,
                  alpha_mse_treshold=0.0,
                  filtration='superlevel', 
-                 push_unmatched_to_1_0=True, 
+                 push_unmatched_to_1_0=False, 
                  barcode_length_threshold=0.0, # ignore barcodes with length < threshold, set to a small value
                  topology_weights=(1., 1.), # weights for the topology classes in the following order: [matched, unmatched]. Possibly give matched (roads) higher weight
                  sphere=False,
                  calculate_channels_separately=False,
                  num_processes=16, # Number of processes for Betti Matching
                  log_timing=False,
+                 is_metric=False,
                  **kwargs):
         super().__init__()
         self.patchify = model.patchify
@@ -44,6 +45,7 @@ class BettiMatchingWithMSELoss(nn.Module):
         self.alpha_mse_treshold = alpha_mse_treshold
         self.calculate_channels_separately = calculate_channels_separately
         self.log_timing = log_timing
+        self.is_metric = is_metric
 
         # Initialize losses
         self.BMLoss = BettiMatchingLoss(
@@ -55,7 +57,8 @@ class BettiMatchingWithMSELoss(nn.Module):
             sphere=sphere,
             include_background=True,
             alpha=1.,
-            use_base_loss=False)
+            use_base_loss=False,
+            is_metric=is_metric)
         # self.MSELoss = MaskedMSELoss(model, norm_pix_loss=False)
     
     def calculate_mse_loss(self, target, pred, mask):
@@ -158,7 +161,13 @@ class BettiMatchingWithMSELoss(nn.Module):
                     "timing/total_ms": total_ms,
                 }, commit=False)
         
-        return loss, {
-            "bm_loss": bm_loss,
-            "mse_loss": mse_loss
-        }
+        if self.is_metric:
+            return {
+                "bm_metric": bm_loss,
+                "mse_metric": mse_loss
+            }
+        else:
+            return loss, {
+                "bm_loss": bm_loss,
+                "mse_loss": mse_loss
+            }

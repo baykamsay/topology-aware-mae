@@ -63,7 +63,7 @@ def calculate_iou(
     # Return mean IoU
     return iou.mean()
 
-def calculate_betti_matching(preds, targets):
+def calculate_betti_matching_seg(preds, targets):
     """
     Calculate the Betti Matching loss
     """
@@ -107,7 +107,7 @@ def calculate_segmentation_metrics(preds, targets):
     # Assuming preds and targets are already in the correct shape
     dice_score = calculate_dice_score(preds, targets)
     iou = calculate_iou(preds, targets)
-    betti_matchings = calculate_betti_matching(preds, targets)
+    betti_matchings = calculate_betti_matching_seg(preds, targets)
 
     return {
         "dice_score": dice_score,
