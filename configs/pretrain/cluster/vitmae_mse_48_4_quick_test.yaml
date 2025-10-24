@@ -48,7 +48,7 @@ logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
   wandb_run_name: "vitmae_48_4_quick_test" # Optional custom run name
-  wandb_run_id: "vitmae_48_4_quick_test" # Optional custom run id
+  # wandb_run_id: "vitmae_48_4_quick_test" # Optional custom run id
   output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_48_4_quick_test" # Checkpoint dir
   val_interval: 4 # validation interval
   log_interval: 1 # wandb log interval
