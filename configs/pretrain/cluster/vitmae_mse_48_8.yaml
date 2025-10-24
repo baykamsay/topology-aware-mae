@@ -20,6 +20,7 @@ data:
   data_path: "/vol/miltank/users/sayb/datasets/massgis_half/train"
   eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_half/val"
   num_workers: 32
+  use_in_memory: true
 
 # Pre-training Hyperparameters
 training:

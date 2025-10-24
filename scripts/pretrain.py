@@ -29,6 +29,7 @@ from utils.visualizations import log_mae_visualizations
 from models.convnextv2 import fcmae
 from models.cnn_mae import cnn_mae
 from models.vit_mae import vit_mae
+from datasets.in_memory_imagefolder import InMemoryImageFolder
 
 # Set up logging
 logging.basicConfig(level=logging.INFO)
@@ -410,6 +411,12 @@ def main(args):
 
     val_transform = transforms.Compose(transforms_list)
 
+    use_in_memory = config.get('data', {}).get('use_in_memory', False)
+    use_in_memory_val = config.get('data', {}).get('use_in_memory_val', use_in_memory)
+
+    train_dataset_cls = InMemoryImageFolder if use_in_memory else datasets.ImageFolder
+    val_dataset_cls = InMemoryImageFolder if use_in_memory_val else datasets.ImageFolder
+
     # Create datasets
     train_data_path = config.get('data', {}).get('data_path')
     val_data_path = config.get('data', {}).get('eval_data_path')
@@ -419,8 +426,13 @@ def main(args):
         sys.exit(1)
 
     try:
-        train_dataset = datasets.ImageFolder(train_data_path, transform=train_transform)
-        logger.info(f"Training dataset loaded from: {train_data_path} using ImageFolder. Found {len(train_dataset)} samples.")
+        train_dataset = train_dataset_cls(train_data_path, transform=train_transform)
+        logger.info(
+            "Training dataset loaded from: %s using %s. Found %d samples.",
+            train_data_path,
+            train_dataset_cls.__name__,
+            len(train_dataset),
+        )
     except Exception as e:
         logger.error(f"Error loading training dataset: {e}")
         sys.exit(1)
@@ -428,8 +440,13 @@ def main(args):
     val_dataset = None
     if val_data_path:
         try:
-            val_dataset = datasets.ImageFolder(val_data_path, transform=val_transform)
-            logger.info(f"Validation dataset loaded from: {val_data_path} using ImageFolder. Found {len(val_dataset)} samples.")
+            val_dataset = val_dataset_cls(val_data_path, transform=val_transform)
+            logger.info(
+                "Validation dataset loaded from: %s using %s. Found %d samples.",
+                val_data_path,
+                val_dataset_cls.__name__,
+                len(val_dataset),
+            )
         except Exception as e:
             logger.warning(f"Error loading validation dataset: {e}")
             sys.exit(1) # or possibly continue if validation is optional
