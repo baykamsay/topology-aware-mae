@@ -19,8 +19,9 @@ data:
     ratio: [0.75, 1.3333] # Aspect ratio range for RandomResizedCrop
   data_path: "/vol/miltank/users/sayb/datasets/massgis_half/train"
   eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_half/val"
-  num_workers: 32
+  num_workers: 8
   use_in_memory: true
+  in_memory_preload_workers: 32
 
 # Pre-training Hyperparameters
 training:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable, Optional, Tuple, Any
+import os
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from typing import Any, Callable, Optional, Tuple
 
 from PIL import Image
 from torchvision.datasets import ImageFolder
@@ -44,6 +46,7 @@ class InMemoryImageFolder(ImageFolder):
         is_valid_file: Optional[Callable[[str], bool]] = None,
         preload_transform: Optional[Callable[[Any], Any]] = None,
         copy_into_memory: bool = True,
+        preload_workers: Optional[int] = None,
     ) -> None:
         super().__init__(
             root,
@@ -55,20 +58,36 @@ class InMemoryImageFolder(ImageFolder):
 
         self.preload_transform = preload_transform
         self.copy_into_memory = copy_into_memory
-        self._image_data = []  # type: ignore[var-annotated]
+        self._image_data = [None] * len(self.samples)  # type: ignore[var-annotated]
 
-        for path, _ in self.samples:
-            image = self.loader(path)
+        worker_count = self._resolve_worker_count(preload_workers)
+        logger.info(
+            "Preloading %d images from %s using %d worker(s)",
+            len(self.samples),
+            root,
+            worker_count,
+        )
 
-            if hasattr(image, "load"):
-                image.load()  # type: ignore[call-arg]
-
-            if self.preload_transform is not None:
-                image = self.preload_transform(image)
-            elif isinstance(image, Image.Image) and self.copy_into_memory:
-                image = image.copy()
-
-            self._image_data.append(image)
+        if worker_count == 1:
+            for idx, (path, _) in enumerate(self.samples):
+                self._image_data[idx] = self._load_single(path)
+        else:
+            with ThreadPoolExecutor(max_workers=worker_count) as executor:
+                futures = {
+                    executor.submit(self._load_single, path): idx
+                    for idx, (path, _) in enumerate(self.samples)
+                }
+                for future in as_completed(futures):
+                    idx = futures[future]
+                    try:
+                        self._image_data[idx] = future.result()
+                    except Exception as exc:  # pragma: no cover - propagate to caller
+                        logger.error(
+                            "Failed to preload image %s: %s",
+                            self.samples[idx][0],
+                            exc,
+                        )
+                        raise
 
         logger.info(
             "Loaded %d images from %s into memory (classes: %d)",
@@ -76,6 +95,25 @@ class InMemoryImageFolder(ImageFolder):
             root,
             len(self.classes),
         )
+
+    def _resolve_worker_count(self, preload_workers: Optional[int]) -> int:
+        if preload_workers is not None:
+            return max(1, preload_workers)
+        cpu_count = os.cpu_count() or 1
+        return max(1, min(32, cpu_count))
+
+    def _load_single(self, path: str) -> Any:
+        image = self.loader(path)
+
+        if hasattr(image, "load"):
+            image.load()  # type: ignore[call-arg]
+
+        if self.preload_transform is not None:
+            image = self.preload_transform(image)
+        elif isinstance(image, Image.Image) and self.copy_into_memory:
+            image = image.copy()
+
+        return image
 
     def __getitem__(self, index: int) -> Tuple[Any, Any]:
         image = self._image_data[index]

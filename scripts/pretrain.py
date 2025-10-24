@@ -411,11 +411,31 @@ def main(args):
 
     val_transform = transforms.Compose(transforms_list)
 
-    use_in_memory = config.get('data', {}).get('use_in_memory', False)
-    use_in_memory_val = config.get('data', {}).get('use_in_memory_val', use_in_memory)
+    data_config = config.get('data', {})
+    use_in_memory = data_config.get('use_in_memory', False)
+    use_in_memory_val = data_config.get('use_in_memory_val', use_in_memory)
 
     train_dataset_cls = InMemoryImageFolder if use_in_memory else datasets.ImageFolder
     val_dataset_cls = InMemoryImageFolder if use_in_memory_val else datasets.ImageFolder
+
+    train_dataset_kwargs = {}
+    val_dataset_kwargs = {}
+
+    if train_dataset_cls is InMemoryImageFolder:
+        preload_workers = data_config.get('in_memory_preload_workers')
+        copy_into_memory = data_config.get('in_memory_copy', True)
+        train_dataset_kwargs = {
+            "preload_workers": preload_workers,
+            "copy_into_memory": copy_into_memory,
+        }
+
+    if val_dataset_cls is InMemoryImageFolder:
+        preload_workers_val = data_config.get('in_memory_val_preload_workers', data_config.get('in_memory_preload_workers'))
+        copy_into_memory_val = data_config.get('in_memory_val_copy', data_config.get('in_memory_copy', True))
+        val_dataset_kwargs = {
+            "preload_workers": preload_workers_val,
+            "copy_into_memory": copy_into_memory_val,
+        }
 
     # Create datasets
     train_data_path = config.get('data', {}).get('data_path')
@@ -426,7 +446,7 @@ def main(args):
         sys.exit(1)
 
     try:
-        train_dataset = train_dataset_cls(train_data_path, transform=train_transform)
+        train_dataset = train_dataset_cls(train_data_path, transform=train_transform, **train_dataset_kwargs)
         logger.info(
             "Training dataset loaded from: %s using %s. Found %d samples.",
             train_data_path,
@@ -440,7 +460,7 @@ def main(args):
     val_dataset = None
     if val_data_path:
         try:
-            val_dataset = val_dataset_cls(val_data_path, transform=val_transform)
+            val_dataset = val_dataset_cls(val_data_path, transform=val_transform, **val_dataset_kwargs)
             logger.info(
                 "Validation dataset loaded from: %s using %s. Found %d samples.",
                 val_data_path,

@@ -33,7 +33,7 @@ data:
   eval_data_path: "./data/pretrain/massgis_half/val"
   num_workers: 4
   use_in_memory: true
-  use_in_memory_val: true
+  in_memory_preload_workers: 16
 
 # Pre-training Hyperparameters
 training:
@@ -58,9 +58,9 @@ training:
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: true
+  enable_wandb: false
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_speed_test_fix_mem" # Optional custom run name
+  wandb_run_name: "vitmae_test" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
   output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
   val_interval: 4 # validation interval
