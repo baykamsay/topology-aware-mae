@@ -16,7 +16,6 @@ import random
 import numpy as np
 import wandb
 from timm.scheduler.cosine_lr import CosineLRScheduler
-import threading
 import signal
 
 # Adjust the path to include the root directory
@@ -200,11 +199,9 @@ def get_param_groups(model, weight_decay):
         {'params': no_decay, 'weight_decay': 0.}
     ]
 
-_save_thread = None
-
 def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
     """
-    Saves a training checkpoint asynchronously in a background thread.
+    Saves a training checkpoint.
 
     Args:
         state (dict): Contains model, optimizer, scheduler states, epoch, best_val_loss.
@@ -212,38 +209,14 @@ def save_checkpoint(state, is_best, output_dir, filename="checkpoint.pth"):
         output_dir (str): Directory where checkpoints will be saved.
         filename (str): Base name for the checkpoint file.
     """
-    global _save_thread
-    if _save_thread is not None:
-        _save_thread.join() # Wait for previous save to finish
+    filepath = os.path.join(output_dir, filename)
+    torch.save(state, filepath)
+    logger.info(f"Checkpoint saved to {filepath}")
 
-    # Move tensors to CPU to avoid race conditions with main training thread
-    state_cpu = {
-        'epoch': state['epoch'],
-        'global_step': state['global_step'],
-        'model_state_dict': {k: v.cpu() for k, v in state['model_state_dict'].items()},
-        'optimizer_state_dict': state['optimizer_state_dict'], # AdamW state is on CPU by default
-        'scheduler_state_dict': state['scheduler_state_dict'],
-        'best_val_loss': state['best_val_loss'],
-        'encoder_frozen': state['encoder_frozen'],
-        'config': state.get('config')
-    }
-    if 'grad_scaler_state_dict' in state:
-        state_cpu['grad_scaler_state_dict'] = state['grad_scaler_state_dict']
-
-    def _save_job():
-        filepath = os.path.join(output_dir, filename)
-        torch.save(state_cpu, filepath)
-        logger.info(f"Checkpoint saved to {filepath}")
-
-        # if is_best:
-        #     best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
-        #     shutil.copyfile(filepath, best_filepath)
-        #     logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
-
-    _save_thread = threading.Thread(target=_save_job)
-    _save_thread.start()
-    logger.info("Started saving checkpoint in background.")
-
+    # if is_best:
+    #     best_filepath = os.path.join(output_dir, "best_checkpoint.pth")
+    #     shutil.copyfile(filepath, best_filepath)
+    #     logger.info(f"Best checkpoint updated to {best_filepath} (Val Loss: {state.get('best_val_loss', 'N/A'):.4f})")
 
 def main(args):
     # Load the configuration
@@ -704,6 +677,12 @@ def main(args):
             is_metric=True
         )
 
+    # ---- End Initialize validation metrics ----
+
+    # Validation parameters
+    val_interval = log_config.get('val_interval', 1)
+    checkpoint_interval = log_config.get('checkpoint_interval', val_interval)
+
     # ---- Start Training Loop ----
     logger.info(f"Starting pretraining for {total_epochs} epochs...")
     for epoch in range(start_epoch, total_epochs):
@@ -787,7 +766,7 @@ def main(args):
             }
 
         # ---- Validation Step ----
-        if (epoch + 1) % log_config.get('val_interval', 1) == 0:
+        if (epoch + 1) % val_interval == 0:
             if val_loader:
                 logger.info(f"--- Starting Validation for Epoch {epoch+1} ---")
                 validation_loss, metric_scores, validation_individual_loss = validate(
@@ -809,7 +788,7 @@ def main(args):
                 log_msg += f" ===="
                 logger.info(log_msg)
 
-                is_best = validation_loss < best_val_loss
+                is_best = validation_loss < best_val_loss # Change to metric
                 if is_best:
                     best_val_loss = validation_loss
                     logger.info(f"Best validation loss updated to {best_val_loss:.4f} at epoch {epoch+1}.")
@@ -826,7 +805,7 @@ def main(args):
         
 
             # ---- Save checkpoint ----
-            if log_config.get('checkpointing', True):
+            if log_config.get('checkpointing', True) and ((epoch + 1) % checkpoint_interval == 0):
                 checkpoint_state = {
                     'epoch': epoch + 1, # Next epoch to start from
                     'global_step': global_step,
@@ -874,12 +853,6 @@ def main(args):
 
     # ---- End of Training Loop ----
     logger.info("Pretraining completed successfully.")
-    
-    # Ensure the final checkpoint is saved before exiting
-    global _save_thread
-    if _save_thread is not None:
-        _save_thread.join()
-        logger.info("Final checkpoint saving operation finished.")
 
     if wandb_logger:
         wandb_logger.finish() # Finish the W&B run

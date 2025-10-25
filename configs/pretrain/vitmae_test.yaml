@@ -66,5 +66,6 @@ logging:
   val_interval: 4 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: false # Include visualizations
-  vis_interval: 4 # visualization interval
+  vis_interval: 2 # visualization interval
   checkpointing: false
+  checkpoint_interval: 4 # checkpoint saving interval in epochs (should be a multiple of val_interval)
