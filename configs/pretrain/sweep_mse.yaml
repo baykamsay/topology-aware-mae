@@ -1,62 +1,53 @@
 program: scripts/pretrain.py
 project: topo-conv-mae-pretrain
-name: sweep_bm
+name: sweep_mse
 
 metric:
   goal: minimize
-  name: val/loss
+  name: val/mse_metric
 
 method: bayes
 parameters:
-  model:
-    parameters:
-      pretrained_path:
-        distribution: categorical
-        values: ["/vol/miltank/users/sayb/projects/topo-conv-mae/pretrained_models/mae_pretrain_vit_base.pth", ""]
   data:
     parameters:
       augmentation:
         parameters:
           max_scale:
             distribution: uniform
-            min: 0.06
-            max: 1.0
-          min_scale_weight:
-            distribution: uniform
             min: 0.1
             max: 1.0
+          min_scale_weight:
+            distribution: q_log_uniform_values
+            min: 0.01
+            max: 1.0
+            q: 0.01
           max_ratio:
-            distribution: uniform
+            distribution: q_log_uniform_values
             min: 1.0
             max: 5.0
+            q: 0.1
   training:
     parameters:
-      frozen_encoder_epochs:
-        distribution: categorical
-        values: [0, 10]
       learning_rate:
         distribution: log_uniform_values
-        min: 1.0e-5
-        max: 1.0e-3
+        min: 5.0e-6
+        max: 5.0e-3
       warmup_epochs:
         distribution: q_uniform
         min: 0
-        max: 30
-        q: 5
-      mixed_precision:
-        distribution: categorical
-        values: [true, false]
+        max: 120
+        q: 30
 
 early_terminate:
   type: hyperband
-  max_iter: 81
+  min_iter: 60
+  eta: 2
   s: 3
-  eta: 1.5
 
 command:
   - ${env}
   - ${interpreter}
   - ${program}
   - "--config"
-  - "/vol/miltank/users/sayb/projects/topo-conv-mae/configs/pretrain/cluster/vitmae_cluster_base.yaml"
+  - "/vol/miltank/users/sayb/projects/topo-conv-mae/configs/pretrain/cluster/vitmae_base.yaml"
   - "--sweep"

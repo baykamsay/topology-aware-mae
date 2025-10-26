@@ -365,8 +365,7 @@ def main(args):
 
     train_transform = transforms.Compose(transforms_list)
 
-    # whole_size = 420 if input_size == 112 else 840
-    crop_size = input_size * 2 if input_size < 63 else input_size
+    crop_size = input_size * 2
 
     # Validation transforms
     transforms_list = [

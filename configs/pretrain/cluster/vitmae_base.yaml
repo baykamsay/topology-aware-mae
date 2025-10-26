@@ -35,9 +35,9 @@ training:
   # Learning Rate Schedule
   learning_rate: 1.e-4 # Base LR
   min_lr: 0.0 # Lower bound
-  warmup_epochs: 40
+  warmup_epochs: 60
   # Training loop
-  epochs: 800 # Adjust as needed
+  epochs: 1200 # Adjust as needed
   batch_size: 512 # Adjust based on GPU memory
   gradient_accumulation_steps: 1 # Gradient accumulation steps
   # Misc
@@ -48,11 +48,11 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_112_8_1e-4" # Optional custom run name
-  wandb_run_id: "vitmae_112_8_1e-4" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_112_8_1e-4" # Checkpoint dir
+  # wandb_run_name: "vitmae_112_8_1e-4" # Optional custom run name
+  # wandb_run_id: "vitmae_112_8_1e-4" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_sweep" # Checkpoint dir
   val_interval: 5 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
   vis_interval: 5 # visualization interval
-  checkpointing: true
+  checkpointing: false
