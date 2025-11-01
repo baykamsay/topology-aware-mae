@@ -184,7 +184,8 @@ class BettiMatchingWithMSELoss(nn.Module):
         if self.is_metric:
             return {
                 "bm_metric": bm_loss,
-                "mse_metric": mse_loss
+                "mse_metric": mse_loss,
+                "combined_metric": mse_loss + bm_loss/200,
             }
         else:
             return loss, {

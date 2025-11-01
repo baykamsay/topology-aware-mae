@@ -1,0 +1,68 @@
+program: scripts/pretrain.py
+project: topo-conv-mae-pretrain
+name: sweep_bm
+
+metric:
+  goal: minimize
+  name: val/combined_metric
+
+method: random
+parameters:
+  loss:
+    parameters:
+      alpha:
+        distribution: log_uniform_values
+        min: 0.00005
+        max: 0.5
+      alpha_warmup_epochs:
+        distribution: q_uniform
+        min: 0
+        max: 120
+        q: 60
+      filtration:
+        values: ["superlevel", "bothlevels"]
+      barcode_length_threshold:
+        distribution: log_uniform_values
+        min: 0.0001
+        max: 0.1
+      calculate_channels_separately:
+        values: [true, false]
+  data:
+    parameters:
+      augmentation:
+        parameters:
+          min_scale_weight:
+            distribution: q_log_uniform_values
+            min: 0.01
+            max: 1.0
+            q: 0.01
+          max_ratio:
+            distribution: q_log_uniform_values
+            min: 1.0
+            max: 5.0
+            q: 0.1
+  training:
+    parameters:
+      learning_rate:
+        distribution: log_uniform_values
+        min: 1.0e-5
+        max: 1.0e-3
+      warmup_epochs:
+        distribution: q_uniform
+        min: 0
+        max: 120
+        q: 60
+
+early_terminate:
+  type: hyperband
+  min_iter: 24
+  eta: 3
+  s: 3
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - "--config"
+  - "/vol/miltank/users/sayb/projects/topo-conv-mae/configs/pretrain/cluster/vitmae_base_bm.yaml"
+  - "--sweep"
