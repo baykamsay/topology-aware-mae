@@ -324,11 +324,11 @@ def main(args):
         img_std = [0.5]
     else:
         # ImageNet default mean and std
-        img_mean = [0.485, 0.456, 0.406]
-        img_std = [0.229, 0.224, 0.225]
-        # Roads mean and std
-        # img_mean = [0.33627802, 0.33987136, 0.29782979]
-        # img_std = [0.19191039, 0.18239774, 0.18225507]
+        # img_mean = [0.485, 0.456, 0.406]
+        # img_std = [0.229, 0.224, 0.225]
+        # MassGIS mean and std
+        img_mean = [0.320, 0.327, 0.279]
+        img_std = [0.169, 0.152, 0.154]
     
     max_scale = augmentation_config.get('max_scale', 1.0)
     min_scale = max_scale * augmentation_config.get('min_scale_weight', 0.2)

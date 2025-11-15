@@ -268,8 +268,12 @@ def main(args):
     # ---- End setting up device ----
 
     # ---- Start Dataset and DataLoader setup ----
-    img_mean = [0.485, 0.456, 0.406]
-    img_std = [0.229, 0.224, 0.225]
+    # ImageNet default mean and std
+    # img_mean = [0.485, 0.456, 0.406]
+    # img_std = [0.229, 0.224, 0.225]
+    # MassGIS mean and std
+    img_mean = [0.320, 0.327, 0.279]
+    img_std = [0.169, 0.152, 0.154]
     input_size = data_config.get('input_size', 56)
 
     joint_transform = JointTransforms(

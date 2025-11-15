@@ -11,7 +11,19 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 # Function to handle denormalization and image preparation for W&B
-def denormalize(tensor, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+def denormalize(tensor, dataset='massgis'):
+    if dataset == 'imagenet':
+        mean = [0.485, 0.456, 0.406]
+        std = [0.229, 0.224, 0.225]
+    elif dataset == 'massgis':
+        mean = [0.320, 0.327, 0.279]
+        std = [0.169, 0.152, 0.154]
+    elif dataset == 'grayscale':
+        mean = [0.5]
+        std = [0.5]
+    else:
+        raise ValueError(f"Unknown dataset for denormalization: {dataset}")
+    
     # Clone to avoid modifying the original tensor
     tensor = tensor.clone()
     
@@ -94,8 +106,8 @@ def log_mae_visualizations(model, loader, device, config, epoch, global_step, wa
             original_imgs_denorm = denormalize(samples)  # Assuming ImageNet mean/std
             reconstructed_imgs_denorm = denormalize(reconstructed_imgs)
         else:
-            original_imgs_denorm = denormalize(samples, [0.5], [0.5])  # For single channel
-            reconstructed_imgs_denorm = denormalize(reconstructed_imgs, [0.5], [0.5])
+            original_imgs_denorm = denormalize(samples, dataset='grayscale')  # For single channel
+            reconstructed_imgs_denorm = denormalize(reconstructed_imgs, dataset='grayscale')
 
         # Create masked images (overlay mask on original)
         # Where img_mask_full is 1 (masked), set original image pixel to gray/black/etc.

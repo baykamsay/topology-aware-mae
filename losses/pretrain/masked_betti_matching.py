@@ -101,9 +101,10 @@ class BettiMatchingWithMSELoss(nn.Module):
         pred_denorm = pred
         if self.norm_pix_loss:
             mean = target.mean(dim=-1, keepdim=True)
-            var = target.var(dim=-1, keepdim=True)
-            target_norm = (target - mean) / (var + 1.e-6)**.5
-            pred_denorm = pred * (var + 1.e-6)**0.5 + mean
+            var = target.var(dim=-1, keepdim=True, correction=0)
+            std = (var + 1.e-6).sqrt()
+            target_norm = (target - mean) / std
+            pred_denorm = pred * std + mean
 
         if self.log_timing:
             if use_cuda:
