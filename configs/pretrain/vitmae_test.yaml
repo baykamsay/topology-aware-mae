@@ -7,7 +7,7 @@ model:
 
 # Loss Configuration
 loss:
-  name: betti_matching
+  name: mse
   norm_pix_loss: true
   # alpha: 0.02
   # alpha_warmup_epochs: 0
@@ -49,21 +49,21 @@ training:
   warmup_epochs: 1
   warmup_lr_init: 0.0 # Can use to have high LR for decoder during warmup
   # Training loop
-  epochs: 4 # Adjust as needed
-  batch_size: 256 # Adjust based on GPU memory
-  gradient_accumulation_steps: 1 # Gradient accumulation steps
+  epochs: 2 # Adjust as needed
+  batch_size: 128 # Adjust based on GPU memory
+  gradient_accumulation_steps: 2 # Gradient accumulation steps
   # Misc
   mixed_precision: true # Use mixed precision training
   seed: 42
 
 # Logging & Checkpointing
 logging:
-  enable_wandb: false
+  enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_test" # Optional custom run name
+  wandb_run_name: "vitmae_test_128_2" # Optional custom run name
   # wandb_run_id: "cnn_mae_bm_test" # Optional custom run id
   output_dir: "./output/pretrain/vitmae_test" # Checkpoint dir
-  val_interval: 4 # validation interval
+  val_interval: 2 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: false # Include visualizations
   vis_interval: 2 # visualization interval
