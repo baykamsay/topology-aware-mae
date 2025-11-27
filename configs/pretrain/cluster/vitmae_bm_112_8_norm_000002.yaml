@@ -1,0 +1,67 @@
+# Model Configuration
+model:
+  name: mae_vit_base_patch16
+  patch_size: 8
+  mask_ratio: 0.75
+
+# Loss Configuration
+loss:
+  name: betti_matching
+  norm_pix_loss: true
+  alpha: 0.000002
+  alpha_warmup_epochs: 0
+  alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
+  filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
+  push_unmatched_to_1_0: false
+  barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
+  sphere: false
+  calculate_channels_separately: false # Calculate Betti numbers for each channel separately
+  patchwise_bm: false # Compute Betti Matching loss patch-wise
+  num_processes: 32
+  
+# Data Configuration
+data:
+  input_size: 112
+  augmentation:
+    name: RandomResizedCrop 
+    max_scale: 1.0
+    min_scale_weight: 0.04
+    max_ratio: 2
+  data_path: "/vol/miltank/users/sayb/datasets/massgis_half/train"
+  eval_data_path: "/vol/miltank/users/sayb/datasets/massgis_half/val"
+  num_workers: 8
+  use_in_memory: true
+  in_memory_preload_workers: 32
+
+# Pre-training Hyperparameters
+training:
+  # Optimizer parameters
+  optimizer: adamw
+  weight_decay: 0.05
+  beta1: 0.9
+  beta2: 0.95
+  # frozen_encoder_epochs: 0
+  # Learning Rate Schedule
+  learning_rate: 1.5e-4 # Base LR
+  min_lr: 0.0 # Lower bound
+  warmup_epochs: 80
+  # Training loop
+  epochs: 1600 # Adjust as needed
+  batch_size: 256 # Adjust based on GPU memory
+  gradient_accumulation_steps: 2 # Gradient accumulation steps
+  # Misc
+  mixed_precision: true # Use mixed precision training
+  seed: 42
+
+# Logging & Checkpointing
+logging:
+  enable_wandb: true
+  wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
+  wandb_run_name: "vitmae_bm_112_8_norm_000002_27-11" # Optional custom run name
+  wandb_run_id: "vitmae_bm_112_8_norm_000002_27-11" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_bm_112_8_norm_000002_27-11" # Checkpoint dir
+  val_interval: 5 # validation interval
+  log_interval: 1 # wandb log interval
+  include_vis: true # Include visualizations
+  vis_interval: 5 # visualization interval
+  checkpointing: true
