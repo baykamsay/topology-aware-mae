@@ -8,14 +8,14 @@ model:
 loss:
   name: betti_matching
   norm_pix_loss: true
-  alpha: 0.000005
-  alpha_warmup_epochs: 800
+  alpha: 0.00115
+  alpha_warmup_epochs: 0
   alpha_mse_treshold: 0 # If mse_loss > treshold, use mse loss purely
   filtration: "bothlevels"  # Available options: "superlevel", "sublevel", "bothlevels"
   push_unmatched_to_1_0: false
   barcode_length_threshold: 0.001 # ignore barcodes with length < threshold, set to a small value
   sphere: false
-  calculate_channels_separately: false # Calculate Betti numbers for each channel separately
+  calculate_channels_separately: true # Calculate Betti numbers for each channel separately
   patchwise_bm: false # Compute Betti Matching loss patch-wise
   num_processes: 32
   
@@ -42,7 +42,7 @@ training:
   beta2: 0.95
   # frozen_encoder_epochs: 0
   # Learning Rate Schedule
-  learning_rate: 6.e-4 # Base LR
+  learning_rate: 2.e-5 # Base LR
   min_lr: 0.0 # Lower bound
   warmup_epochs: 80
   # Training loop
@@ -57,9 +57,9 @@ training:
 logging:
   enable_wandb: true
   wandb_project: "topo-conv-mae-pretrain" # Your W&B project name
-  wandb_run_name: "vitmae_bm_112_8_norm_warmup_28-11" # Optional custom run name
-  wandb_run_id: "vitmae_bm_112_8_norm_warmup_28-11" # Optional custom run id
-  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_bm_112_8_norm_warmup_28-11" # Checkpoint dir
+  wandb_run_name: "vitmae_bm_112_8_norm_bl_color_low_lr_28-11" # Optional custom run name
+  wandb_run_id: "vitmae_bm_112_8_norm_bl_color_low_lr_28-11" # Optional custom run id
+  output_dir: "/vol/miltank/users/sayb/projects/topo-conv-mae/output/pretrain/vitmae_bm_112_8_norm_bl_color_low_lr_28-11" # Checkpoint dir
   val_interval: 5 # validation interval
   log_interval: 1 # wandb log interval
   include_vis: true # Include visualizations
